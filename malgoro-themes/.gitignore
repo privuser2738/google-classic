@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+*.o
+*.cache
+
+# Temporary files
+*~
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Compressed files (source files should be uncompressed)
+*.tar.gz
+*.zip
+
+# Generated files
+*.gresource
+
+# Logs
+*.log
