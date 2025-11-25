@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(git init:*)",
+      "Bash(PATH=\"/c/msys64/mingw64/bin:$PATH\" cmake ..:*)",
+      "Bash(/c/msys64/mingw64/bin/gcc.exe -Wall -Wextra -std=c11 -Iinclude src/main.c src/holo.c src/commands.c -o holo.exe)",
+      "Bash(/c/msys64/mingw64/bin/gcc.exe:*)",
+      "Bash(gcc:*)",
+      "Bash(export PATH=\"/c/msys64/mingw64/bin:$PATH\")",
+      "Bash(./holo.exe:*)",
+      "Bash(for d in */)",
+      "Bash(do echo \"$d\")",
+      "Bash(done)",
+      "Bash(powershell -Command:*)",
+      "Bash(git gc:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
