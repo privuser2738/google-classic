@@ -248,6 +248,12 @@ static holo_result_t cmd_chat(holo_context_t *ctx, int argc, char **argv) {
         g_llm = llm_load(argv[2]);
 
         if (g_llm) {
+            /* Try to initialize CUDA for GPU acceleration */
+#ifdef HOLO_USE_CUDA
+            if (llm_cuda_init(g_llm) == 0) {
+                holo_print("  \033[32m[CUDA]\033[0m GPU acceleration enabled\n");
+            }
+#endif
             /* Extract filename */
             const char *name = strrchr(argv[2], '\\');
             if (!name) name = strrchr(argv[2], '/');
@@ -308,7 +314,8 @@ static holo_result_t cmd_chat(holo_context_t *ctx, int argc, char **argv) {
 
     g_token_count = 0;
     llm_sampler_t sampler = LLM_SAMPLER_DEFAULT;
-    int generated = llm_chat(g_llm, message, 512, &sampler, token_callback, NULL);
+    sampler.temperature = 0.0f;  /* Greedy decoding for now */
+    int generated = llm_chat(g_llm, message, 64, &sampler, token_callback, NULL);
 
     if (generated < 0) {
         holo_print("(generation error)\n");
@@ -365,8 +372,23 @@ static holo_result_t cmd_model(holo_context_t *ctx, int argc, char **argv) {
     }
 
     if (strcmp(subcmd, "info") == 0) {
-        holo_print("\nModel Status: No model loaded\n");
-        holo_print("Use 'model load <path>' to load a GGUF model.\n\n");
+        if (g_llm) {
+            llm_print_info(g_llm);
+        } else {
+            holo_print("\nModel Status: No model loaded\n");
+            holo_print("Use 'model load <path>' to load a GGUF model.\n\n");
+        }
+        return HOLO_OK;
+    }
+
+    if (strcmp(subcmd, "unload") == 0) {
+        if (g_llm) {
+            llm_free(g_llm);
+            g_llm = NULL;
+            holo_print("Model unloaded.\n");
+        } else {
+            holo_print("No model is currently loaded.\n");
+        }
         return HOLO_OK;
     }
 
@@ -375,16 +397,143 @@ static holo_result_t cmd_model(holo_context_t *ctx, int argc, char **argv) {
             holo_print("Usage: model load <path/to/model.gguf>\n");
             return HOLO_OK;
         }
+
+        /* Unload existing model */
+        if (g_llm) {
+            llm_free(g_llm);
+            g_llm = NULL;
+        }
+
         holo_print("\nLoading model: %s\n", argv[2]);
-        holo_print("Model loading ready - full implementation in src/ai/engine.c\n\n");
+        g_llm = llm_load(argv[2]);
+
+        if (g_llm) {
+            /* Try to initialize CUDA for GPU acceleration */
+#ifdef HOLO_USE_CUDA
+            if (llm_cuda_init(g_llm) == 0) {
+                holo_print("  \033[32m[CUDA]\033[0m GPU acceleration enabled\n");
+            }
+#endif
+            /* Extract filename */
+            const char *name = strrchr(argv[2], '\\');
+            if (!name) name = strrchr(argv[2], '/');
+            if (name) name++; else name = argv[2];
+
+            holo_print("\033[32m[OK]\033[0m Model loaded: %s\n", name);
+            holo_print("     Ready to chat! Type: chat <your message>\n\n");
+        } else {
+            holo_print_error("Failed to load model: %s\n", argv[2]);
+            return HOLO_ERROR_IO;
+        }
         return HOLO_OK;
     }
 
     if (strcmp(subcmd, "list") == 0) {
-        holo_print("\nModel Directory: ~/.holo/models/\n");
-        holo_print("No models found. Download GGUF models from:\n");
-        holo_print("  - https://huggingface.co/models?filter=gguf\n");
-        holo_print("  - TheBloke's quantized models\n\n");
+        holo_print("\nLocal Models (models/):\n");
+        holo_print("-----------------------\n");
+
+        /* Try to list models directory */
+#ifdef _WIN32
+        WIN32_FIND_DATAA fd;
+        HANDLE hFind = FindFirstFileA("models\\*.gguf", &fd);
+        if (hFind != INVALID_HANDLE_VALUE) {
+            int count = 0;
+            do {
+                /* Get file size */
+                LARGE_INTEGER size;
+                size.LowPart = fd.nFileSizeLow;
+                size.HighPart = fd.nFileSizeHigh;
+                double gb = size.QuadPart / (1024.0 * 1024.0 * 1024.0);
+
+                holo_print("  %-40s  %.2f GB\n", fd.cFileName, gb);
+                count++;
+            } while (FindNextFileA(hFind, &fd));
+            FindClose(hFind);
+
+            if (count == 0) {
+                holo_print("  (no models found)\n");
+            }
+            holo_print("\n");
+        } else {
+            holo_print("  (models/ directory not found or empty)\n\n");
+        }
+#else
+        holo_print("  (use 'ls models/*.gguf' to list)\n\n");
+#endif
+
+        holo_print("Download models with: model download <name>\n");
+        holo_print("Available: ministral-3b, qwen2-7b, llama3-8b, phi3-mini\n\n");
+        return HOLO_OK;
+    }
+
+    if (strcmp(subcmd, "download") == 0) {
+        if (argc < 3) {
+            holo_print("\nUsage: model download <name>\n\n");
+            holo_print("Available models:\n");
+            holo_print("  ministral-3b   Ministral 3B Instruct Q8 (3.5 GB)\n");
+            holo_print("  qwen2-7b       Qwen2 7B Instruct Q4_K_M (4.4 GB)\n");
+            holo_print("  llama3-8b      Llama 3 8B Instruct Q4_K_M (4.7 GB)\n");
+            holo_print("  phi3-mini      Phi-3 Mini 4K Q4_K_M (2.4 GB)\n");
+            holo_print("  gemma2-2b      Gemma 2 2B Instruct Q8 (2.8 GB)\n");
+            holo_print("\nModels are downloaded to: models/\n\n");
+            return HOLO_OK;
+        }
+
+        const char *name = argv[2];
+        const char *url = NULL;
+        const char *filename = NULL;
+
+        if (strcmp(name, "ministral-3b") == 0) {
+            url = "https://huggingface.co/bartowski/Ministral-3b-instruct-GGUF/resolve/main/Ministral-3b-instruct-Q8_0.gguf";
+            filename = "Ministral-3b-instruct.Q8_0.gguf";
+        } else if (strcmp(name, "qwen2-7b") == 0) {
+            url = "https://huggingface.co/Qwen/Qwen2-7B-Instruct-GGUF/resolve/main/qwen2-7b-instruct-q4_k_m.gguf";
+            filename = "qwen2-7b-instruct.Q4_K_M.gguf";
+        } else if (strcmp(name, "llama3-8b") == 0) {
+            url = "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf";
+            filename = "llama3-8b-instruct.Q4_K_M.gguf";
+        } else if (strcmp(name, "phi3-mini") == 0) {
+            url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf";
+            filename = "phi3-mini-4k.Q4_K_M.gguf";
+        } else if (strcmp(name, "gemma2-2b") == 0) {
+            url = "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q8_0.gguf";
+            filename = "gemma2-2b-it.Q8_0.gguf";
+        } else {
+            holo_print("Unknown model: %s\n", name);
+            holo_print("Use 'model download' to see available models.\n");
+            return HOLO_OK;
+        }
+
+        holo_print("\nDownloading %s...\n", name);
+        holo_print("URL: %s\n\n", url);
+
+        /* Create models directory if needed */
+#ifdef _WIN32
+        CreateDirectoryA("models", NULL);
+
+        char cmd[2048];
+        snprintf(cmd, sizeof(cmd),
+            "powershell -Command \"& { "
+            "$ProgressPreference = 'SilentlyContinue'; "
+            "Invoke-WebRequest -Uri '%s' -OutFile 'models/%s' "
+            "}\"", url, filename);
+
+        holo_print("Running: powershell download...\n");
+        holo_print("This may take a few minutes depending on your connection.\n\n");
+
+        int ret = system(cmd);
+        if (ret == 0) {
+            holo_print("\n\033[32m[OK]\033[0m Downloaded: models/%s\n", filename);
+            holo_print("     Load with: model load models/%s\n\n", filename);
+        } else {
+            holo_print("\n\033[31m[ERROR]\033[0m Download failed.\n");
+            holo_print("Try manually: curl -L -o models/%s \"%s\"\n\n", filename, url);
+        }
+#else
+        char cmd[2048];
+        snprintf(cmd, sizeof(cmd), "mkdir -p models && curl -L -o models/%s '%s'", filename, url);
+        system(cmd);
+#endif
         return HOLO_OK;
     }
 

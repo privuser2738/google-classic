@@ -498,7 +498,10 @@ const gguf_tensor_info_t *gguf_find_tensor(gguf_ctx_t *ctx, const char *name) {
 
 const void *gguf_get_tensor_data(gguf_ctx_t *ctx, const gguf_tensor_info_t *tensor) {
     if (!ctx || !tensor || !ctx->mmap_base) return NULL;
-    return (const char *)ctx->mmap_base + tensor->offset;
+    /* mmap_base points to file start (NOT adjusted)
+     * data_offset points to start of tensor data section
+     * tensor->offset is relative to data section */
+    return (const char *)ctx->mmap_base + ctx->data_offset + tensor->offset;
 }
 
 int gguf_load_tensor(gguf_ctx_t *ctx, const gguf_tensor_info_t *tensor, void *buffer, size_t size) {
@@ -520,11 +523,12 @@ int gguf_mmap(gguf_ctx_t *ctx) {
     if (!ctx) return -1;
 
 #ifdef _WIN32
-    /* Get file size */
-    fseek(ctx->file, 0, SEEK_END);
-    size_t file_size = ftell(ctx->file);
-
+    /* Get file size properly for large files */
     HANDLE hFile = (HANDLE)_get_osfhandle(_fileno(ctx->file));
+    LARGE_INTEGER li_size;
+    if (!GetFileSizeEx(hFile, &li_size)) return -1;
+    size_t file_size = (size_t)li_size.QuadPart;
+
     HANDLE hMap = CreateFileMappingA(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
     if (!hMap) return -1;
 
@@ -534,8 +538,8 @@ int gguf_mmap(gguf_ctx_t *ctx) {
     if (!ctx->mmap_base) return -1;
     ctx->mmap_size = file_size;
 
-    /* Adjust base to point to tensor data */
-    ctx->mmap_base = (char *)ctx->mmap_base + ctx->data_offset;
+    /* Note: DON'T adjust base - keep it pointing to file start
+     * tensor offsets are relative to data_offset, which we add in gguf_get_tensor_data */
 
 #else
     struct stat st;
@@ -546,7 +550,8 @@ int gguf_mmap(gguf_ctx_t *ctx) {
     void *base = mmap(NULL, ctx->mmap_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (base == MAP_FAILED) return -1;
 
-    ctx->mmap_base = (char *)base + ctx->data_offset;
+    /* Don't adjust - keep pointing to file start */
+    ctx->mmap_base = base;
 #endif
 
     return 0;

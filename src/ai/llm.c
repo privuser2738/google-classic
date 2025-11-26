@@ -94,17 +94,66 @@ static void free_tokenizer(llm_tokenizer_t *tok) {
     free(tok->scores);
 }
 
-/* Find byte token for a given byte value (e.g., find token for <0x0A>) */
+/* GPT-2/Qwen byte-level BPE: bytes are mapped to Unicode code points
+ * Printable ASCII (33-126) stay the same
+ * Others are shifted: byte 0x00-0x20 -> U+0100-0x0120, etc. */
+static char byte_to_unicode[256][5];  /* Pre-computed byte->unicode string */
+static int byte_to_unicode_initialized = 0;
+
+static void init_byte_to_unicode(void) {
+    if (byte_to_unicode_initialized) return;
+
+    /* GPT-2 byte encoder mapping */
+    int n = 0;
+    for (int i = 33; i <= 126; i++) {  /* Printable ASCII */
+        byte_to_unicode[i][0] = (char)i;
+        byte_to_unicode[i][1] = '\0';
+    }
+    /* Non-printable bytes get shifted to higher Unicode */
+    int shift = 256;
+    for (int i = 0; i < 256; i++) {
+        if (i >= 33 && i <= 126) continue;  /* Already handled */
+        if (i == 161 || i == 172 || (i >= 166 && i <= 172)) continue; /* Some Latin-1 */
+
+        /* Encode as UTF-8 the code point (256 + offset) */
+        int cp = shift + n;
+        if (cp < 0x80) {
+            byte_to_unicode[i][0] = (char)cp;
+            byte_to_unicode[i][1] = '\0';
+        } else if (cp < 0x800) {
+            byte_to_unicode[i][0] = (char)(0xC0 | (cp >> 6));
+            byte_to_unicode[i][1] = (char)(0x80 | (cp & 0x3F));
+            byte_to_unicode[i][2] = '\0';
+        }
+        n++;
+    }
+    byte_to_unicode_initialized = 1;
+}
+
+/* Find byte token for a given byte value */
 static int find_byte_token(llm_ctx_t *ctx, unsigned char byte) {
+    /* Try GGML format: <0xNN> */
     char byte_str[8];
     snprintf(byte_str, sizeof(byte_str), "<0x%02X>", byte);
-
     for (int i = 0; i < ctx->tokenizer.vocab_size; i++) {
         const char *tok = ctx->tokenizer.vocab[i];
         if (tok && strcmp(tok, byte_str) == 0) {
             return i;
         }
     }
+
+    /* Try GPT-2/Qwen byte encoding */
+    init_byte_to_unicode();
+    const char *uni = byte_to_unicode[byte];
+    if (uni[0]) {
+        for (int i = 0; i < ctx->tokenizer.vocab_size; i++) {
+            const char *tok = ctx->tokenizer.vocab[i];
+            if (tok && strcmp(tok, uni) == 0) {
+                return i;
+            }
+        }
+    }
+
     return -1;  /* Not found */
 }
 
@@ -265,10 +314,10 @@ const char *llm_token_str(llm_ctx_t *ctx, int token) {
  * Weight Loading
  * ============================================================================ */
 
-/* Store tensor types for proper dequantization */
-static int g_emb_type = GGML_TYPE_F32;
-static int g_weight_type = GGML_TYPE_Q4_K;
-static int g_output_type = GGML_TYPE_Q4_K;
+/* Store tensor types for proper dequantization - visible to CUDA module */
+int g_emb_type = GGML_TYPE_F32;
+int g_weight_type = GGML_TYPE_Q4_K;
+int g_output_type = GGML_TYPE_Q4_K;
 
 static int load_weights(llm_ctx_t *ctx) {
     gguf_ctx_t *gguf = ctx->gguf;
@@ -293,8 +342,6 @@ static int load_weights(llm_ctx_t *ctx) {
     if (t) {
         ctx->weights.tok_embeddings = (void *)gguf_get_tensor_data(gguf, t);
         g_emb_type = t->type;
-        printf("  [DEBUG] Embedding shape: [%llu, %llu] type=%d\n",
-               (unsigned long long)t->dims[0], (unsigned long long)t->dims[1], t->type);
     }
 
     /* Output norm */
@@ -324,12 +371,7 @@ static int load_weights(llm_ctx_t *ctx) {
         t = gguf_find_tensor(gguf, name);
         if (t) {
             ctx->weights.layers[l].wq = (void *)gguf_get_tensor_data(gguf, t);
-            if (l == 0) {
-                g_weight_type = t->type;
-                /* Debug: print tensor dimensions */
-                printf("  [DEBUG] Wq shape: [%llu, %llu] (rows x cols)\n",
-                       (unsigned long long)t->dims[0], (unsigned long long)t->dims[1]);
-            }
+            if (l == 0) g_weight_type = t->type;
         }
 
         snprintf(name, sizeof(name), "blk.%d.attn_k.weight", l);
@@ -339,6 +381,19 @@ static int load_weights(llm_ctx_t *ctx) {
         snprintf(name, sizeof(name), "blk.%d.attn_v.weight", l);
         t = gguf_find_tensor(gguf, name);
         if (t) ctx->weights.layers[l].wv = (void *)gguf_get_tensor_data(gguf, t);
+
+        /* QKV biases (Qwen models) */
+        snprintf(name, sizeof(name), "blk.%d.attn_q.bias", l);
+        t = gguf_find_tensor(gguf, name);
+        if (t) ctx->weights.layers[l].bq = (float *)gguf_get_tensor_data(gguf, t);
+
+        snprintf(name, sizeof(name), "blk.%d.attn_k.bias", l);
+        t = gguf_find_tensor(gguf, name);
+        if (t) ctx->weights.layers[l].bk = (float *)gguf_get_tensor_data(gguf, t);
+
+        snprintf(name, sizeof(name), "blk.%d.attn_v.bias", l);
+        t = gguf_find_tensor(gguf, name);
+        if (t) ctx->weights.layers[l].bv = (float *)gguf_get_tensor_data(gguf, t);
 
         snprintf(name, sizeof(name), "blk.%d.attn_output.weight", l);
         t = gguf_find_tensor(gguf, name);
@@ -350,13 +405,7 @@ static int load_weights(llm_ctx_t *ctx) {
 
         snprintf(name, sizeof(name), "blk.%d.ffn_gate.weight", l);
         t = gguf_find_tensor(gguf, name);
-        if (t) {
-            ctx->weights.layers[l].w1 = (void *)gguf_get_tensor_data(gguf, t);
-            if (l == 0) {
-                printf("  [DEBUG] FFN gate shape: [%llu, %llu]\n",
-                       (unsigned long long)t->dims[0], (unsigned long long)t->dims[1]);
-            }
-        }
+        if (t) ctx->weights.layers[l].w1 = (void *)gguf_get_tensor_data(gguf, t);
 
         snprintf(name, sizeof(name), "blk.%d.ffn_down.weight", l);
         t = gguf_find_tensor(gguf, name);
@@ -379,7 +428,8 @@ static int alloc_state(llm_ctx_t *ctx) {
     int ffn_dim = ctx->config.ffn_dim;
     int n_heads = ctx->config.n_heads;
     int vocab = ctx->config.vocab_size;
-    int max_seq = ctx->config.context_length;
+    /* Limit practical sequence length to save memory */
+    int max_seq = ctx->config.context_length > 4096 ? 4096 : ctx->config.context_length;
 
     ctx->state.x = alloc_aligned(dim * sizeof(float));
     ctx->state.xb = alloc_aligned(dim * sizeof(float));
@@ -421,7 +471,8 @@ static void free_state(llm_state_t *state) {
 
 static int alloc_kv_cache(llm_ctx_t *ctx) {
     int n_layers = ctx->config.n_layers;
-    int max_seq = ctx->config.context_length;
+    /* Limit practical sequence length to save memory */
+    int max_seq = ctx->config.context_length > 4096 ? 4096 : ctx->config.context_length;
     int n_kv_heads = ctx->config.n_kv_heads;
     int head_dim = ctx->config.head_dim;
 
@@ -486,6 +537,9 @@ llm_ctx_t *llm_load(const char *model_path) {
 
     printf("  Architecture: %s (%d layers, %d dim)\n",
            ctx->config.arch, ctx->config.n_layers, ctx->config.embedding_dim);
+    printf("  Attention: %d heads, %d KV heads, head_dim=%d\n",
+           ctx->config.n_heads, ctx->config.n_kv_heads, ctx->config.head_dim);
+    printf("  FFN dim: %d\n", ctx->config.ffn_dim);
     printf("  Context: %d tokens\n", ctx->config.context_length);
 
     /* Load tokenizer */
@@ -514,6 +568,11 @@ llm_ctx_t *llm_load(const char *model_path) {
            g_emb_type < 18 ? type_names[g_emb_type] : "unknown",
            g_weight_type < 18 ? type_names[g_weight_type] : "unknown",
            g_output_type < 18 ? type_names[g_output_type] : "unknown");
+
+    /* Report QKV bias (Qwen models) */
+    if (ctx->weights.layers[0].bq) {
+        printf("  QKV bias: enabled (Qwen-style)\n");
+    }
 
     /* Allocate state */
     if (alloc_state(ctx) != 0) {
@@ -578,84 +637,86 @@ void llm_reset(llm_ctx_t *ctx) {
  * Performs dst = M @ v where M is quantized
  * ============================================================================ */
 
-/* GGUF stores weight matrices as [in_dim, out_dim] (transposed from PyTorch convention)
+/* GGUF stores weight matrices as [out_dim, in_dim] (standard row-major)
  * For y = W @ x:
  *   - x has length in_dim
  *   - y has length out_dim
- *   - W is stored as [in_dim, out_dim] in row-major
- *   - y[j] = sum_i(W[i, j] * x[i]) = sum_i(W[i * out_dim + j] * x[i])
+ *   - W is stored as [out_dim, in_dim] in row-major
+ *   - y[i] = sum_j(W[i, j] * x[j]) = sum_j(W[i * in_dim + j] * x[j])
+ *   - This is standard dot product of row i with input vector x
  *
  * Parameters:
  *   dst: output vector [out_dim]
- *   M: weight matrix [in_dim, out_dim]
+ *   M: weight matrix [out_dim, in_dim]
  *   v: input vector [in_dim]
- *   in_dim: input dimension (number of rows in M)
- *   out_dim: output dimension (number of cols in M)
+ *   out_dim: output dimension (number of rows in M)
+ *   in_dim: input dimension (number of cols in M)
  */
-static void matmul_q(float *dst, const void *M, const float *v,
-                     int out_dim, int in_dim, int quant_type) {
+/* Non-static for CUDA module access */
+static int g_matmul_debug = 0;
+
+void matmul_q(float *dst, const void *M, const float *v,
+              int out_dim, int in_dim, int quant_type) {
     if (!M) {
         memset(dst, 0, out_dim * sizeof(float));
         return;
     }
 
-    /* For GGUF layout, we need transposed multiplication */
+    /* Debug disabled */
+
+    /* Standard row-major matmul: each output is dot product of one row with input */
     switch (quant_type) {
         case GGML_TYPE_F32: {
             const float *Mf = (const float *)M;
-            /* M is [in_dim, out_dim], compute dst[j] = sum_i(M[i,j] * v[i]) */
-            memset(dst, 0, out_dim * sizeof(float));
-            for (int i = 0; i < in_dim; i++) {
-                float vi = v[i];
-                const float *row = Mf + i * out_dim;
-                for (int j = 0; j < out_dim; j++) {
-                    dst[j] += row[j] * vi;
+            for (int i = 0; i < out_dim; i++) {
+                float sum = 0.0f;
+                const float *row = Mf + i * in_dim;
+                for (int j = 0; j < in_dim; j++) {
+                    sum += row[j] * v[j];
                 }
+                dst[i] = sum;
             }
             break;
         }
         case GGML_TYPE_F16: {
             const uint16_t *Mf = (const uint16_t *)M;
-            memset(dst, 0, out_dim * sizeof(float));
-            for (int i = 0; i < in_dim; i++) {
-                float vi = v[i];
-                const uint16_t *row = Mf + i * out_dim;
-                for (int j = 0; j < out_dim; j++) {
-                    dst[j] += f16_to_f32(row[j]) * vi;
+            for (int i = 0; i < out_dim; i++) {
+                float sum = 0.0f;
+                const uint16_t *row = Mf + i * in_dim;
+                for (int j = 0; j < in_dim; j++) {
+                    sum += f16_to_f32(row[j]) * v[j];
                 }
+                dst[i] = sum;
             }
             break;
         }
         case GGML_TYPE_Q8_0: {
-            /* Q8_0: each row of out_dim values is quantized into blocks of 32
-             * M is [in_dim, out_dim], blocks_per_row = out_dim / 32 */
+            /* Q8_0: matrix is [out_dim, in_dim], each row quantized into blocks of 32
+             * blocks_per_row = in_dim / 32 */
             const block_q8_0 *blocks = (const block_q8_0 *)M;
-            int blocks_per_row = out_dim / QK8_0;
+            int blocks_per_row = in_dim / QK8_0;
 
-            memset(dst, 0, out_dim * sizeof(float));
-
-            for (int i = 0; i < in_dim; i++) {
-                float vi = v[i];
+            for (int i = 0; i < out_dim; i++) {
+                float sum = 0.0f;
                 const block_q8_0 *row = blocks + i * blocks_per_row;
 
                 for (int b = 0; b < blocks_per_row; b++) {
                     float scale = f16_to_f32(row[b].d);
                     int base = b * QK8_0;
                     for (int k = 0; k < QK8_0; k++) {
-                        dst[base + k] += scale * row[b].qs[k] * vi;
+                        sum += scale * row[b].qs[k] * v[base + k];
                     }
                 }
+                dst[i] = sum;
             }
             break;
         }
         case GGML_TYPE_Q4_0: {
             const block_q4_0 *blocks = (const block_q4_0 *)M;
-            int blocks_per_row = out_dim / QK4_0;
+            int blocks_per_row = in_dim / QK4_0;
 
-            memset(dst, 0, out_dim * sizeof(float));
-
-            for (int i = 0; i < in_dim; i++) {
-                float vi = v[i];
+            for (int i = 0; i < out_dim; i++) {
+                float sum = 0.0f;
                 const block_q4_0 *row = blocks + i * blocks_per_row;
 
                 for (int b = 0; b < blocks_per_row; b++) {
@@ -663,79 +724,87 @@ static void matmul_q(float *dst, const void *M, const float *v,
                     int base = b * QK4_0;
                     for (int k = 0; k < 16; k++) {
                         uint8_t byte = row[b].qs[k];
-                        int8_t v0 = (byte & 0xF) - 8;
-                        int8_t v1 = (byte >> 4) - 8;
-                        dst[base + k] += scale * v0 * vi;
-                        dst[base + k + 16] += scale * v1 * vi;
+                        int8_t q0 = (byte & 0xF) - 8;
+                        int8_t q1 = (byte >> 4) - 8;
+                        sum += scale * q0 * v[base + k];
+                        sum += scale * q1 * v[base + k + 16];
                     }
                 }
+                dst[i] = sum;
             }
             break;
         }
         case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q6_K:
-            /* TODO: Implement transposed versions for K-quants */
-            /* For now, fall through to zero output */
+            /* TODO: Implement K-quants */
+            memset(dst, 0, out_dim * sizeof(float));
+            break;
         default:
             memset(dst, 0, out_dim * sizeof(float));
             break;
     }
 }
 
-/* Dequantize embedding column
- * GGUF stores embeddings as [dim, vocab] - each column is a token embedding
- * For Q8_0: blocks are organized by rows (dim), so we need to gather across blocks
+/* Dequantize embedding for a token
+ * GGUF tensor dims are column-major: dims[0]=cols, dims[1]=rows
+ * For embeddings [4096, 32000] in GGUF means 32000 tokens x 4096 dim
+ * Memory layout: each token's embedding is contiguous (standard row-major access)
+ *
+ * Parameters:
+ *   dst: output embedding [dim]
+ *   embeddings: embedding table [vocab_size, dim] in memory
+ *   token: token index
+ *   dim: embedding dimension
+ *   vocab_size: vocabulary size (unused but for clarity)
+ * Non-static for CUDA module access
  */
-static void get_embedding(float *dst, const void *embeddings, int token,
-                          int dim, int vocab_size, int quant_type) {
+void get_embedding(float *dst, const void *embeddings, int token,
+                   int dim, int vocab_size, int quant_type) {
+    (void)vocab_size;  /* Memory layout is [vocab, dim] - token gives row offset */
+
     switch (quant_type) {
         case GGML_TYPE_F32: {
-            /* [dim, vocab] layout - stride by vocab to get column */
-            const float *emb = (const float *)embeddings;
-            for (int i = 0; i < dim; i++) {
-                dst[i] = emb[i * vocab_size + token];
-            }
+            /* Each token's embedding is contiguous: emb[token * dim ... token * dim + dim-1] */
+            const float *emb = (const float *)embeddings + token * dim;
+            memcpy(dst, emb, dim * sizeof(float));
             break;
         }
         case GGML_TYPE_F16: {
-            const uint16_t *emb = (const uint16_t *)embeddings;
+            const uint16_t *emb = (const uint16_t *)embeddings + token * dim;
             for (int i = 0; i < dim; i++) {
-                dst[i] = f16_to_f32(emb[i * vocab_size + token]);
+                dst[i] = f16_to_f32(emb[i]);
             }
             break;
         }
         case GGML_TYPE_Q8_0: {
-            /* Q8_0: each row of dim values is quantized into blocks
-             * Row i contains vocab_size values, packed into blocks of 32
-             * We need value at column 'token' from each of the 'dim' rows */
-            int blocks_per_row = vocab_size / QK8_0;
-            const block_q8_0 *blocks = (const block_q8_0 *)embeddings;
+            /* Q8_0: each token's embedding (dim values) is quantized into blocks of 32
+             * blocks_per_token = dim / 32 */
+            int blocks_per_token = dim / QK8_0;
+            const block_q8_0 *token_blocks = (const block_q8_0 *)embeddings + token * blocks_per_token;
 
-            for (int i = 0; i < dim; i++) {
-                /* Find which block and position within block */
-                int block_idx = token / QK8_0;
-                int within_block = token % QK8_0;
-                const block_q8_0 *row_blocks = blocks + i * blocks_per_row;
-                float scale = f16_to_f32(row_blocks[block_idx].d);
-                dst[i] = scale * row_blocks[block_idx].qs[within_block];
+            for (int b = 0; b < blocks_per_token; b++) {
+                float scale = f16_to_f32(token_blocks[b].d);
+                int base = b * QK8_0;
+                for (int k = 0; k < QK8_0; k++) {
+                    dst[base + k] = scale * token_blocks[b].qs[k];
+                }
             }
             break;
         }
         case GGML_TYPE_Q4_0: {
-            int blocks_per_row = vocab_size / QK4_0;
-            const block_q4_0 *blocks = (const block_q4_0 *)embeddings;
+            int blocks_per_token = dim / QK4_0;
+            const block_q4_0 *token_blocks = (const block_q4_0 *)embeddings + token * blocks_per_token;
 
-            for (int i = 0; i < dim; i++) {
-                int block_idx = token / QK4_0;
-                int within_block = token % QK4_0;
-                const block_q4_0 *row_blocks = blocks + i * blocks_per_row;
-                float scale = f16_to_f32(row_blocks[block_idx].d);
-
-                /* Q4_0: values 0-15 in first half, 16-31 in second half */
-                int byte_idx = within_block < 16 ? within_block : within_block - 16;
-                uint8_t byte = row_blocks[block_idx].qs[byte_idx];
-                int8_t val = within_block < 16 ? (byte & 0xF) - 8 : (byte >> 4) - 8;
-                dst[i] = scale * val;
+            for (int b = 0; b < blocks_per_token; b++) {
+                float scale = f16_to_f32(token_blocks[b].d);
+                int base = b * QK4_0;
+                for (int k = 0; k < 16; k++) {
+                    uint8_t byte = token_blocks[b].qs[k];
+                    int8_t q0 = (byte & 0xF) - 8;
+                    int8_t q1 = (byte >> 4) - 8;
+                    dst[base + k] = scale * q0;
+                    dst[base + k + 16] = scale * q1;
+                }
             }
             break;
         }
@@ -789,6 +858,8 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
             memset(s->x, 0, dim * sizeof(float));
         }
 
+        /* Debug disabled */
+
         /* Process through transformer layers */
         for (int l = 0; l < n_layers; l++) {
             /* ----- Attention Block ----- */
@@ -805,6 +876,17 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
             matmul_q(s->q, w->layers[l].wq, s->xb, dim, dim, qtype);
             matmul_q(s->k, w->layers[l].wk, s->xb, kv_dim, dim, qtype);
             matmul_q(s->v, w->layers[l].wv, s->xb, kv_dim, dim, qtype);
+
+            /* Add QKV biases if present (Qwen models) */
+            if (w->layers[l].bq) {
+                for (int i = 0; i < dim; i++) s->q[i] += w->layers[l].bq[i];
+            }
+            if (w->layers[l].bk) {
+                for (int i = 0; i < kv_dim; i++) s->k[i] += w->layers[l].bk[i];
+            }
+            if (w->layers[l].bv) {
+                for (int i = 0; i < kv_dim; i++) s->v[i] += w->layers[l].bv[i];
+            }
 
             /* Apply RoPE to Q and K separately (K has fewer heads) */
             /* RoPE for Q (all heads) */
@@ -935,11 +1017,57 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
  * Sampling
  * ============================================================================ */
 
+static int g_debug_sample_count = 0;
+
+void llm_debug_reset(void) {
+    g_debug_sample_count = 0;
+}
+
 int llm_sample(llm_ctx_t *ctx, const llm_sampler_t *sampler) {
     if (!ctx || !ctx->loaded) return -1;
 
     float *logits = ctx->state.logits;
     int vocab_size = ctx->config.vocab_size;
+
+    /* Debug: print first few samples (disabled) */
+    if (0 && g_debug_sample_count < 5) {
+        /* Find top 5 logits */
+        int top_idx[5] = {0, 1, 2, 3, 4};
+        float top_val[5];
+        for (int i = 0; i < 5; i++) top_val[i] = logits[i];
+
+        for (int i = 5; i < vocab_size; i++) {
+            /* Find min in top 5 */
+            int min_j = 0;
+            for (int j = 1; j < 5; j++) {
+                if (top_val[j] < top_val[min_j]) min_j = j;
+            }
+            if (logits[i] > top_val[min_j]) {
+                top_val[min_j] = logits[i];
+                top_idx[min_j] = i;
+            }
+        }
+
+        /* Sort top 5 */
+        for (int i = 0; i < 4; i++) {
+            for (int j = i+1; j < 5; j++) {
+                if (top_val[j] > top_val[i]) {
+                    float tv = top_val[i]; top_val[i] = top_val[j]; top_val[j] = tv;
+                    int ti = top_idx[i]; top_idx[i] = top_idx[j]; top_idx[j] = ti;
+                }
+            }
+        }
+
+        fprintf(stderr, "[DEBUG] Sample %d - Top logits (EOS=%d logit=%.2f):\n",
+                g_debug_sample_count, ctx->config.eos_token,
+                logits[ctx->config.eos_token]);
+        for (int i = 0; i < 5; i++) {
+            const char *tok = ctx->tokenizer.vocab[top_idx[i]];
+            fprintf(stderr, "  [%d] %.3f '%s'\n", top_idx[i], top_val[i],
+                    tok ? tok : "(null)");
+        }
+        g_debug_sample_count++;
+    }
 
     /* Apply temperature */
     if (sampler->temperature > 0 && sampler->temperature != 1.0f) {
@@ -1026,7 +1154,7 @@ int llm_generate(llm_ctx_t *ctx,
     ctx->n_tokens = n_prompt;
 
     /* Process prompt (prefill) */
-    if (llm_forward(ctx, prompt_tokens, n_prompt) != 0) {
+    if (llm_forward_auto(ctx, prompt_tokens, n_prompt) != 0) {
         fprintf(stderr, "LLM: Forward pass failed on prompt\n");
         return -1;
     }
@@ -1057,7 +1185,7 @@ int llm_generate(llm_ctx_t *ctx,
         }
 
         /* Forward pass for next token */
-        if (llm_forward(ctx, &token, 1) != 0) {
+        if (llm_forward_auto(ctx, &token, 1) != 0) {
             fprintf(stderr, "LLM: Forward pass failed at token %d\n", i);
             break;
         }
@@ -1105,6 +1233,9 @@ llm_chat_template_t llm_detect_template(llm_ctx_t *ctx) {
         chat_template = gguf_get_string(ctx->gguf, "tokenizer.chat_template");
     }
 
+    /* Template detection debug (disabled) */
+    (void)chat_template;
+
     /* If we have the actual template string, analyze it */
     if (chat_template && chat_template[0]) {
         /* ChatML: uses <|im_start|> and <|im_end|> */
@@ -1143,8 +1274,8 @@ llm_chat_template_t llm_detect_template(llm_ctx_t *ctx) {
     bool has_llama3 = false;
     bool has_gemma = false;
 
-    /* Scan first part of vocabulary for special tokens */
-    int scan_limit = ctx->tokenizer.vocab_size < 1000 ? ctx->tokenizer.vocab_size : 1000;
+    /* Scan full vocabulary for special tokens (they may be at the end) */
+    int scan_limit = ctx->tokenizer.vocab_size;
     for (int i = 0; i < scan_limit; i++) {
         const char *tok = ctx->tokenizer.vocab[i];
         if (!tok) continue;
@@ -1282,6 +1413,12 @@ static bool is_eot_token(llm_ctx_t *ctx, int token) {
     if (strcmp(str, "</s>") == 0) return true;
     if (strcmp(str, "<|im_start|>") == 0) return true;  /* New turn starting */
 
+    /* Check for start-of-new-turn tokens (tokenized ChatML markers)
+     * Token "▁<|" or space followed by | often precedes "im_start" */
+    if (strcmp(str, "▁<|") == 0 || strcmp(str, " <|") == 0) {
+        return true;
+    }
+
     return false;
 }
 
@@ -1295,6 +1432,11 @@ int llm_chat(llm_ctx_t *ctx,
 
     /* Detect and apply chat template */
     llm_chat_template_t template_type = llm_detect_template(ctx);
+
+    /* Override for specific architectures */
+    if (strstr(ctx->config.arch, "qwen")) {
+        template_type = LLM_CHAT_TEMPLATE_CHATML;
+    }
 
     char formatted_prompt[8192];
     llm_format_chat(ctx, formatted_prompt, sizeof(formatted_prompt),
@@ -1313,6 +1455,7 @@ int llm_chat(llm_ctx_t *ctx,
 
     /* Reset context for new generation */
     llm_reset(ctx);
+    llm_debug_reset();
 
     /* Tokenize formatted prompt
      * Note: Don't add BOS since the formatted prompt already contains
@@ -1325,6 +1468,8 @@ int llm_chat(llm_ctx_t *ctx,
         return -1;
     }
 
+    /* Debug disabled */
+
     /* Copy prompt tokens to context */
     if (n_prompt > ctx->max_tokens) {
         n_prompt = ctx->max_tokens;
@@ -1333,7 +1478,7 @@ int llm_chat(llm_ctx_t *ctx,
     ctx->n_tokens = n_prompt;
 
     /* Process prompt (prefill) */
-    if (llm_forward(ctx, prompt_tokens, n_prompt) != 0) {
+    if (llm_forward_auto(ctx, prompt_tokens, n_prompt) != 0) {
         fprintf(stderr, "LLM: Forward pass failed on prompt\n");
         return -1;
     }
@@ -1364,7 +1509,7 @@ int llm_chat(llm_ctx_t *ctx,
         }
 
         /* Forward pass for next token */
-        if (llm_forward(ctx, &token, 1) != 0) {
+        if (llm_forward_auto(ctx, &token, 1) != 0) {
             fprintf(stderr, "LLM: Forward pass failed at token %d\n", i);
             break;
         }

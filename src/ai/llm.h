@@ -90,6 +90,11 @@ typedef struct {
         void *wv;               /* Value projection */
         void *wo;               /* Output projection */
 
+        /* QKV biases (used by Qwen, not LLaMA) */
+        float *bq;              /* Query bias [dim] */
+        float *bk;              /* Key bias [kv_dim] */
+        float *bv;              /* Value bias [kv_dim] */
+
         void *ffn_norm;         /* FFN RMS norm weight */
         void *w1;               /* FFN gate projection (or up for some models) */
         void *w2;               /* FFN down projection */
@@ -206,6 +211,25 @@ int llm_generate(llm_ctx_t *ctx,
 
 /* Get model info string */
 void llm_print_info(llm_ctx_t *ctx);
+
+/* ============================================================================
+ * CUDA Backend (optional GPU acceleration)
+ * ============================================================================ */
+
+/* Initialize CUDA backend for a loaded model context */
+int llm_cuda_init(llm_ctx_t *ctx);
+
+/* Cleanup CUDA resources */
+void llm_cuda_cleanup(void);
+
+/* Check if CUDA is available and initialized */
+bool llm_cuda_available(void);
+
+/* Reset CUDA state (clear GPU KV cache) */
+void llm_cuda_reset(void);
+
+/* Auto-dispatching forward that uses GPU if available, CPU otherwise */
+int llm_forward_auto(llm_ctx_t *ctx, const int *tokens, int n_tokens);
 
 /* ============================================================================
  * Chat Template Support

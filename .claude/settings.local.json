@@ -36,7 +36,20 @@
       "Bash(timeout 90 ./dist/bin/holo.exe:*)",
       "Bash(timeout 120 ./dist/bin/holo.exe:*)",
       "Bash(timeout 180 ./dist/bin/holo.exe:*)",
-      "Bash(timeout 240 ./dist/bin/holo.exe:*)"
+      "Bash(timeout 240 ./dist/bin/holo.exe:*)",
+      "Bash(./build-cuda.bat clean)",
+      "Bash(timeout:*)",
+      "Bash(python3:*)",
+      "Bash(xxd:*)",
+      "Bash(where:*)",
+      "Bash(./test_read.exe:*)",
+      "Bash(PATH=\"/c/msys64/mingw64/bin:$PATH\")",
+      "Bash(PATH=\"/c/msys64/mingw64/bin:$PATH\" python3:*)",
+      "Bash(nvcc:*)",
+      "Bash(\"C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe\" -latest -property installationPath)",
+      "Bash(cmd //c:*)",
+      "WebSearch",
+      "Bash(./build-cuda.bat)"
     ],
     "deny": [],
     "ask": []
