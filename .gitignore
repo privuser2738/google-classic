@@ -26,6 +26,7 @@
 *.exp
 *.iobj
 *.ipdb
+/crypto/
 
 # -----------------------------------------------------------------------------
 # Common C/C++ Build Directories (applies to all subprojects)
