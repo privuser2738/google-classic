@@ -22,7 +22,12 @@
       "Bash(./build-windows.bat clean)",
       "Bash(./dist/bin/holo.exe:*)",
       "Bash(dir:*)",
-      "Bash(./build-windows.bat)"
+      "Bash(./build-windows.bat)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch:*)",
+      "Bash(git submodule update:*)",
+      "Bash(git reset:*)",
+      "Bash(git restore:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nHolo AI Inference Engine v0.3.0\n\n- Custom GGUF parser for loading quantized models\n- Full transformer forward pass (attention, FFN, RoPE)\n- Quantized matrix multiplication (Q8_0, Q4_K, Q6_K)\n- AVX2 SIMD optimizations for vector operations\n- Chat template support (ChatML, Llama2/3, Gemma, Phi)\n- KV cache for autoregressive generation\n- SentencePiece token handling\n- HTTP server framework foundation\n- Windows build script with clean option\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []
