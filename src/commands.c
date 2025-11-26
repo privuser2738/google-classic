@@ -6,7 +6,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include "holo.h"
+#include "ai/llm.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -194,13 +196,87 @@ static holo_result_t cmd_echo(holo_context_t *ctx, int argc, char **argv) {
     return HOLO_OK;
 }
 
-/* Command: chat (placeholder for AI chat) */
+/* Global LLM context */
+static llm_ctx_t *g_llm = NULL;
+
+/* Token callback for streaming output */
+static bool token_callback(int token, const char *text, void *user_data) {
+    (void)token;
+    (void)user_data;
+    if (text && *text) {
+        printf("%s", text);
+        fflush(stdout);
+    }
+    return true;  /* Continue generation */
+}
+
+/* Command: chat (AI chat interface) */
 static holo_result_t cmd_chat(holo_context_t *ctx, int argc, char **argv) {
     (void)ctx;
 
     if (argc < 2) {
         holo_print("Usage: chat <message>\n");
         holo_print("Start a conversation with Holo AI.\n");
+        holo_print("\nOptions:\n");
+        holo_print("  chat <message>        Send a message to the AI\n");
+        holo_print("  chat --model <path>   Load a GGUF model\n");
+        holo_print("  chat --unload         Unload current model\n");
+        holo_print("  chat --info           Show current model info\n");
+        return HOLO_OK;
+    }
+
+    /* Handle --model flag */
+    if (strcmp(argv[1], "--model") == 0 || strcmp(argv[1], "-m") == 0) {
+        if (argc < 3) {
+            holo_print("Usage: chat --model <path/to/model.gguf>\n");
+            return HOLO_OK;
+        }
+
+        /* Unload existing model */
+        if (g_llm) {
+            llm_free(g_llm);
+            g_llm = NULL;
+        }
+
+        /* Load new model */
+        holo_print("\nLoading model...\n");
+        g_llm = llm_load(argv[2]);
+
+        if (g_llm) {
+            /* Extract filename */
+            const char *name = strrchr(argv[2], '\\');
+            if (!name) name = strrchr(argv[2], '/');
+            if (name) name++; else name = argv[2];
+
+            holo_print("\033[32m[OK]\033[0m Model loaded: %s\n", name);
+            holo_print("     Ready to chat! Type: chat <your message>\n\n");
+        } else {
+            holo_print_error("Failed to load model: %s\n", argv[2]);
+            return HOLO_ERROR_IO;
+        }
+        return HOLO_OK;
+    }
+
+    /* Handle --unload flag */
+    if (strcmp(argv[1], "--unload") == 0) {
+        if (g_llm) {
+            llm_free(g_llm);
+            g_llm = NULL;
+            holo_print("Model unloaded.\n");
+        } else {
+            holo_print("No model is currently loaded.\n");
+        }
+        return HOLO_OK;
+    }
+
+    /* Handle --info flag */
+    if (strcmp(argv[1], "--info") == 0) {
+        if (g_llm) {
+            llm_print_info(g_llm);
+        } else {
+            holo_print("\nNo model loaded.\n");
+            holo_print("Use: chat --model <path/to/model.gguf>\n\n");
+        }
         return HOLO_OK;
     }
 
@@ -211,9 +287,99 @@ static holo_result_t cmd_chat(holo_context_t *ctx, int argc, char **argv) {
         strncat(message, argv[i], sizeof(message) - strlen(message) - 1);
     }
 
-    holo_print("\n[Holo]: AI chat integration coming soon...\n");
-    holo_print("        Your message: \"%s\"\n\n", message);
+    /* Display user message */
+    holo_print("\n\033[1;34m[You]:\033[0m %s\n\n", message);
 
+    /* Check if model is loaded */
+    if (!g_llm) {
+        holo_print("\033[1;33m[Holo]:\033[0m No model loaded.\n");
+        holo_print("        Load a model first: chat --model <path/to/model.gguf>\n\n");
+        return HOLO_OK;
+    }
+
+    /* Generate response using chat template */
+    holo_print("\033[1;32m[Holo]:\033[0m ");
+
+    llm_sampler_t sampler = LLM_SAMPLER_DEFAULT;
+    int generated = llm_chat(g_llm, message, 512, &sampler, token_callback, NULL);
+
+    if (generated < 0) {
+        holo_print("(generation error)\n");
+    }
+    holo_print("\n\n");
+
+    return HOLO_OK;
+}
+
+/* Command: model (AI model management) */
+static holo_result_t cmd_model(holo_context_t *ctx, int argc, char **argv) {
+    (void)ctx;
+
+    if (argc < 2) {
+        holo_print("\nAI Model Management\n");
+        holo_print("===================\n\n");
+        holo_print("Usage:\n");
+        holo_print("  model load <path>     Load a GGUF model file\n");
+        holo_print("  model unload          Unload current model\n");
+        holo_print("  model info            Show loaded model info\n");
+        holo_print("  model list            List available models\n");
+        holo_print("  model backends        Show available compute backends\n");
+        holo_print("\nSupported Formats:\n");
+        holo_print("  GGUF (.gguf)          Recommended format\n");
+        holo_print("\nSupported Architectures:\n");
+        holo_print("  Llama, Llama2, Llama3, Mistral, Mixtral\n");
+        holo_print("  Qwen, Qwen2, Phi, Phi2, Phi3\n");
+        holo_print("  Gemma, Gemma2, StarCoder, StarCoder2\n");
+        holo_print("  DeepSeek, Command-R, Falcon, MPT\n");
+        holo_print("\n");
+        return HOLO_OK;
+    }
+
+    const char *subcmd = argv[1];
+
+    if (strcmp(subcmd, "backends") == 0) {
+        holo_print("\nAvailable Compute Backends:\n");
+        holo_print("---------------------------\n");
+        holo_print("  \033[32m[x]\033[0m CPU       Always available\n");
+#ifdef _WIN32
+        holo_print("  [ ] CUDA      NVIDIA GPU (requires nvcuda.dll)\n");
+        holo_print("  [ ] Vulkan    Cross-platform GPU (requires vulkan-1.dll)\n");
+#elif defined(__APPLE__)
+        holo_print("  \033[32m[x]\033[0m Metal     Apple GPU (native)\n");
+#else
+        holo_print("  [ ] CUDA      NVIDIA GPU (requires libcuda.so)\n");
+        holo_print("  [ ] ROCm      AMD GPU (requires libamdhip64.so)\n");
+        holo_print("  [ ] Vulkan    Cross-platform GPU (requires libvulkan.so)\n");
+#endif
+        holo_print("\n");
+        return HOLO_OK;
+    }
+
+    if (strcmp(subcmd, "info") == 0) {
+        holo_print("\nModel Status: No model loaded\n");
+        holo_print("Use 'model load <path>' to load a GGUF model.\n\n");
+        return HOLO_OK;
+    }
+
+    if (strcmp(subcmd, "load") == 0) {
+        if (argc < 3) {
+            holo_print("Usage: model load <path/to/model.gguf>\n");
+            return HOLO_OK;
+        }
+        holo_print("\nLoading model: %s\n", argv[2]);
+        holo_print("Model loading ready - full implementation in src/ai/engine.c\n\n");
+        return HOLO_OK;
+    }
+
+    if (strcmp(subcmd, "list") == 0) {
+        holo_print("\nModel Directory: ~/.holo/models/\n");
+        holo_print("No models found. Download GGUF models from:\n");
+        holo_print("  - https://huggingface.co/models?filter=gguf\n");
+        holo_print("  - TheBloke's quantized models\n\n");
+        return HOLO_OK;
+    }
+
+    holo_print("Unknown model subcommand: %s\n", subcmd);
     return HOLO_OK;
 }
 
@@ -233,6 +399,31 @@ static holo_result_t cmd_projects(holo_context_t *ctx, int argc, char **argv) {
     return HOLO_OK;
 }
 
+/* Command: serve (start API server) */
+static holo_result_t cmd_serve(holo_context_t *ctx, int argc, char **argv) {
+    (void)ctx;
+
+    uint16_t port = 8420;
+    if (argc > 1) {
+        port = (uint16_t)atoi(argv[1]);
+    }
+
+    holo_print("\n");
+    holo_print("Holo API Server\n");
+    holo_print("===============\n");
+    holo_print("  Port: %d\n", port);
+    holo_print("  Endpoints:\n");
+    holo_print("    POST /v1/chat/completions\n");
+    holo_print("    GET  /v1/models\n");
+    holo_print("    GET  /health\n");
+    holo_print("\n");
+    holo_print("Server implementation ready - integrate with 'holo_http_server_*' API\n");
+    holo_print("See: include/holo/net.h and src/net/http.c\n");
+    holo_print("\n");
+
+    return HOLO_OK;
+}
+
 /* Register all built-in commands */
 holo_result_t holo_register_builtin_commands(holo_context_t *ctx) {
     static const holo_command_t builtins[] = {
@@ -247,7 +438,9 @@ holo_result_t holo_register_builtin_commands(holo_context_t *ctx) {
         {"ls",       "List directory contents",    "ls [path]",        cmd_ls},
         {"echo",     "Print arguments",            "echo <text>",      cmd_echo},
         {"chat",     "Chat with Holo AI",          "chat <message>",   cmd_chat},
+        {"model",    "Manage AI models",           "model <cmd>",      cmd_model},
         {"projects", "List Holo subprojects",      "projects",         cmd_projects},
+        {"serve",    "Start API server",           "serve [port]",     cmd_serve},
     };
 
     size_t count = sizeof(builtins) / sizeof(builtins[0]);

@@ -17,7 +17,12 @@
       "Bash(git remote add:*)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nHolo v0.2.0 - Enterprise-grade cross-platform AI assistant\n\n- Pure C/C++ implementation, no external dependencies\n- Platform Abstraction Layer (PAL) for Windows/Linux/macOS/iOS/Android\n- Rich terminal formatting (colors, boxes, tables, progress bars)\n- REPL with 13 built-in commands\n- HTTP/WebSocket API spec for custom AI backend\n- Cross-platform CMake build system\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(C:/Users/rob/source/holo/holo.exe:*)",
+      "Bash(./build-windows.bat clean)",
+      "Bash(./dist/bin/holo.exe:*)",
+      "Bash(dir:*)",
+      "Bash(./build-windows.bat)"
     ],
     "deny": [],
     "ask": []
