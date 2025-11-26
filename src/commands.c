@@ -200,12 +200,17 @@ static holo_result_t cmd_echo(holo_context_t *ctx, int argc, char **argv) {
 static llm_ctx_t *g_llm = NULL;
 
 /* Token callback for streaming output */
+static int g_token_count = 0;
+
 static bool token_callback(int token, const char *text, void *user_data) {
     (void)token;
     (void)user_data;
+
     if (text && *text) {
+        /* Print the token text */
         printf("%s", text);
         fflush(stdout);
+        g_token_count++;
     }
     return true;  /* Continue generation */
 }
@@ -299,12 +304,16 @@ static holo_result_t cmd_chat(holo_context_t *ctx, int argc, char **argv) {
 
     /* Generate response using chat template */
     holo_print("\033[1;32m[Holo]:\033[0m ");
+    fflush(stdout);
 
+    g_token_count = 0;
     llm_sampler_t sampler = LLM_SAMPLER_DEFAULT;
     int generated = llm_chat(g_llm, message, 512, &sampler, token_callback, NULL);
 
     if (generated < 0) {
         holo_print("(generation error)\n");
+    } else if (generated == 0) {
+        holo_print("(no response generated)\n");
     }
     holo_print("\n\n");
 

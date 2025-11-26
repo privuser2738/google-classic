@@ -14,6 +14,25 @@ extern "C" {
 #endif
 
 /* ============================================================================
+ * GGML Quantization Type Constants
+ * ============================================================================ */
+
+#define GGML_TYPE_F32     0
+#define GGML_TYPE_F16     1
+#define GGML_TYPE_Q4_0    2
+#define GGML_TYPE_Q4_1    3
+#define GGML_TYPE_Q5_0    6
+#define GGML_TYPE_Q5_1    7
+#define GGML_TYPE_Q8_0    8
+#define GGML_TYPE_Q8_1    9
+#define GGML_TYPE_Q2_K   10
+#define GGML_TYPE_Q3_K   11
+#define GGML_TYPE_Q4_K   12
+#define GGML_TYPE_Q5_K   13
+#define GGML_TYPE_Q6_K   14
+#define GGML_TYPE_Q8_K   15
+
+/* ============================================================================
  * Quantization Block Structures
  * ============================================================================ */
 

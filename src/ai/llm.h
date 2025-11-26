@@ -218,6 +218,7 @@ typedef enum {
     LLM_CHAT_TEMPLATE_LLAMA2,       /* [INST] ... [/INST] */
     LLM_CHAT_TEMPLATE_LLAMA3,       /* <|start_header_id|>role<|end_header_id|> */
     LLM_CHAT_TEMPLATE_MISTRAL,      /* Same as ChatML for Mistral models */
+    LLM_CHAT_TEMPLATE_MISTRAL_V1,   /* <s>role\nmessage</s> (Ministral native) */
     LLM_CHAT_TEMPLATE_GEMMA,        /* <start_of_turn>role\n...<end_of_turn> */
     LLM_CHAT_TEMPLATE_PHI,          /* <|user|>\n...<|end|>\n<|assistant|> */
     LLM_CHAT_TEMPLATE_ZEPHYR,       /* <|user|>\n...\n<|assistant|> */

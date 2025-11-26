@@ -204,6 +204,9 @@ int gguf_mmap(gguf_ctx_t *ctx);
 /* Print model info */
 void gguf_print_info(gguf_ctx_t *ctx);
 
+/* Dump all metadata keys (debug) */
+void gguf_dump_keys(gguf_ctx_t *ctx);
+
 /* ============================================================================
  * Quantization Helpers
  * ============================================================================ */

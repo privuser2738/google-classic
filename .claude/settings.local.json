@@ -27,7 +27,16 @@
       "Bash(git submodule update:*)",
       "Bash(git reset:*)",
       "Bash(git restore:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nHolo AI Inference Engine v0.3.0\n\n- Custom GGUF parser for loading quantized models\n- Full transformer forward pass (attention, FFN, RoPE)\n- Quantized matrix multiplication (Q8_0, Q4_K, Q6_K)\n- AVX2 SIMD optimizations for vector operations\n- Chat template support (ChatML, Llama2/3, Gemma, Phi)\n- KV cache for autoregressive generation\n- SentencePiece token handling\n- HTTP server framework foundation\n- Windows build script with clean option\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nHolo AI Inference Engine v0.3.0\n\n- Custom GGUF parser for loading quantized models\n- Full transformer forward pass (attention, FFN, RoPE)\n- Quantized matrix multiplication (Q8_0, Q4_K, Q6_K)\n- AVX2 SIMD optimizations for vector operations\n- Chat template support (ChatML, Llama2/3, Gemma, Phi)\n- KV cache for autoregressive generation\n- SentencePiece token handling\n- HTTP server framework foundation\n- Windows build script with clean option\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(tasklist:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout 30 ./dist/bin/holo.exe:*)",
+      "Bash(printf:*)",
+      "Bash(timeout 60 ./dist/bin/holo.exe:*)",
+      "Bash(timeout 90 ./dist/bin/holo.exe:*)",
+      "Bash(timeout 120 ./dist/bin/holo.exe:*)",
+      "Bash(timeout 180 ./dist/bin/holo.exe:*)",
+      "Bash(timeout 240 ./dist/bin/holo.exe:*)"
     ],
     "deny": [],
     "ask": []

@@ -577,3 +577,28 @@ void gguf_print_info(gguf_ctx_t *ctx) {
     printf("RMS norm eps: %e\n", ctx->model.rms_norm_eps);
     printf("\n");
 }
+
+/* Dump all GGUF metadata keys for debugging */
+void gguf_dump_keys(gguf_ctx_t *ctx) {
+    if (!ctx) return;
+
+    printf("\n=== All GGUF Metadata Keys ===\n");
+    for (uint64_t i = 0; i < ctx->n_kv && i < 100; i++) {
+        const char *key = ctx->kv[i].key.data ? ctx->kv[i].key.data : "(null)";
+        gguf_type_t type = ctx->kv[i].value.type;
+
+        if (type == GGUF_TYPE_UINT32) {
+            printf("  [%llu] %s = %u\n", (unsigned long long)i, key, ctx->kv[i].value.u32);
+        } else if (type == GGUF_TYPE_INT32) {
+            printf("  [%llu] %s = %d\n", (unsigned long long)i, key, ctx->kv[i].value.i32);
+        } else if (type == GGUF_TYPE_FLOAT32) {
+            printf("  [%llu] %s = %f\n", (unsigned long long)i, key, ctx->kv[i].value.f32);
+        } else if (type == GGUF_TYPE_STRING) {
+            printf("  [%llu] %s = \"%s\"\n", (unsigned long long)i, key,
+                   ctx->kv[i].value.str.data ? ctx->kv[i].value.str.data : "");
+        } else {
+            printf("  [%llu] %s (type=%d)\n", (unsigned long long)i, key, type);
+        }
+    }
+    printf("\n");
+}
