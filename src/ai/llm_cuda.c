@@ -104,6 +104,7 @@ typedef struct {
     int output_type;        /* Output quantization */
     float rms_eps;
     float rope_freq_base;
+    float rope_base_global; /* 1M for Gemma3 global layers */
     float emb_scale;        /* Embedding scale factor (sqrt(dim) for Gemma) */
     bool is_gemma;          /* Is this a Gemma model */
 } llm_cuda_state_t;
@@ -245,13 +246,14 @@ int llm_cuda_init(llm_ctx_t *ctx) {
     g_cuda.output_type = g_output_type;
     g_cuda.rms_eps = ctx->config.rms_norm_eps;
     g_cuda.rope_freq_base = ctx->config.rope_freq_base;
+    g_cuda.rope_base_global = 1000000.0f;  /* 1M for Gemma3 global layers */
 
     /* Check if this is a Gemma model (needs embedding scaling) */
     g_cuda.is_gemma = (strstr(ctx->config.arch, "gemma") != NULL ||
                        strstr(ctx->config.arch, "Gemma") != NULL);
     g_cuda.emb_scale = g_cuda.is_gemma ? sqrtf((float)g_cuda.dim) : 1.0f;
     if (g_cuda.is_gemma) {
-        printf("[CUDA] Gemma model detected - using embedding scale %.2f\n", g_cuda.emb_scale);
+        printf("[CUDA] Gemma model detected - using embedding scale %.2f, global RoPE base 1M\n", g_cuda.emb_scale);
     }
 
     int dim = g_cuda.dim;
@@ -700,9 +702,12 @@ int llm_forward_cuda(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
                 cuda_vec_add(g_cuda.d_v, g_cuda.d_v, dl->d_bv, kv_dim);
             }
 
-            /* Apply RoPE to Q and K */
+            /* Apply RoPE to Q and K
+             * Gemma3: Global layers (L5, L11, L17...) use 1M base, local use 10K */
+            bool is_global_layer = g_cuda.is_gemma && ((l + 1) % 6 == 0);
+            float rope_base = is_global_layer ? g_cuda.rope_base_global : g_cuda.rope_freq_base;
             cuda_rope_apply(g_cuda.d_q, g_cuda.d_k, pos, head_dim,
-                            n_heads, n_kv_heads, g_cuda.rope_freq_base);
+                            n_heads, n_kv_heads, rope_base);
 
             /* DEBUG: Check after RoPE (layer 0, first token) */
             if (t == 0 && l == 0 && g_profile_enabled) {

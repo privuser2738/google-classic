@@ -58,7 +58,9 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:github.com)",
       "Bash(HOLO_DISABLE_CUDA=1 printf:*)",
-      "Bash(ollama run:*)"
+      "Bash(ollama run:*)",
+      "Bash(cat:*)",
+      "WebFetch(domain:arxiv.org)"
     ],
     "deny": [],
     "ask": []
