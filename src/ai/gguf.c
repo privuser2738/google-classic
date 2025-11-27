@@ -378,6 +378,11 @@ gguf_ctx_t *gguf_open(const char *path) {
     snprintf(key, sizeof(key), "%s.attention.head_count_kv", ctx->model.arch);
     ctx->model.attention_head_count_kv = (uint32_t)gguf_get_int(ctx, key, ctx->model.attention_head_count);
 
+    /* Read explicit head_dim (key_length) or compute from embedding_dim / head_count */
+    snprintf(key, sizeof(key), "%s.attention.key_length", ctx->model.arch);
+    uint32_t default_head_dim = ctx->model.embedding_length / ctx->model.attention_head_count;
+    ctx->model.attention_key_length = (uint32_t)gguf_get_int(ctx, key, default_head_dim);
+
     snprintf(key, sizeof(key), "%s.feed_forward_length", ctx->model.arch);
     ctx->model.feed_forward_length = (uint32_t)gguf_get_int(ctx, key, 11008);
 

@@ -31,10 +31,13 @@ void cuda_free(void* ptr);
 void cuda_memcpy_h2d(void* dst, const void* src, size_t size);  /* Host to Device */
 void cuda_memcpy_d2h(void* dst, const void* src, size_t size);  /* Device to Host */
 void cuda_memcpy_d2d(void* dst, const void* src, size_t size);  /* Device to Device */
+void cuda_memcpy_d2d_async(void* dst, const void* src, size_t size);  /* Async D2D on copy stream */
+void cuda_memcpy_d2h_async(void* dst, const void* src, size_t size);  /* Async D2H on copy stream */
 void cuda_memset(void* ptr, int value, size_t size);
 
 /* Synchronization */
 void cuda_sync(void);
+void cuda_sync_copy(void);  /* Sync only copy stream */
 
 /* Vector operations (float32) */
 void cuda_vec_add(float* dst, const float* a, const float* b, int n);
@@ -53,8 +56,18 @@ void cuda_matmul_q4_0(float* dst, const void* M, const float* v, int out_dim, in
 void cuda_matmul_q4_k(float* dst, const void* M, const float* v, int out_dim, int in_dim);
 void cuda_matmul_q6_k(float* dst, const void* M, const float* v, int out_dim, int in_dim);
 
+/* Batched QKV projection - computes Q, K, V in single kernel launch */
+void cuda_batched_qkv_q8_0(float* q_out, float* k_out, float* v_out,
+                           const void* Wq, const void* Wk, const void* Wv,
+                           const float* x, int q_dim, int kv_dim, int in_dim);
+
+/* Batched FFN gate+up with fused SiLU - computes SiLU(W1@x) * (W3@x) */
+void cuda_batched_ffn_gate_up_q8_0(float* out, const void* W1, const void* W3,
+                                   const float* x, int ffn_dim, int in_dim);
+
 /* Activation functions */
 void cuda_silu(float* x, int n);
+void cuda_silu_mul(float* dst, const float* a, const float* b, int n);  /* Fused SiLU + multiply */
 void cuda_gelu(float* x, int n);
 void cuda_relu(float* x, int n);
 
@@ -89,6 +102,17 @@ void cuda_attention_single(float* dst, const float* q,
                            float* att_buf, int kv_len, int head_dim,
                            int kv_head, int kv_dim);
 
+/* Multi-head attention - all heads computed in one kernel launch
+ * Much faster than calling cuda_attention_single in a loop!
+ * dst: output [n_heads * head_dim]
+ * q: all query vectors [n_heads * head_dim]
+ * k_cache: key cache for this layer [max_seq * n_kv_heads * head_dim]
+ * v_cache: value cache for this layer [max_seq * n_kv_heads * head_dim]
+ */
+void cuda_multi_head_attention(float* dst, const float* q,
+                               const float* k_cache, const float* v_cache,
+                               int kv_len, int head_dim, int n_heads, int n_kv_heads);
+
 /* RoPE */
 void cuda_rope_apply(float* q, float* k, int pos, int head_dim, int n_heads,
                      int n_kv_heads, float freq_base);
@@ -99,6 +123,10 @@ void cuda_get_embedding_f32(float* dst, const float* embeddings, int token,
 void cuda_get_embedding_f16(float* dst, const void* embeddings, int token,
                             int dim, int vocab_size);
 void cuda_get_embedding_q8_0(float* dst, const void* embeddings, int token,
+                             int dim, int vocab_size);
+void cuda_get_embedding_q4_0(float* dst, const void* embeddings, int token,
+                             int dim, int vocab_size);
+void cuda_get_embedding_q6_k(float* dst, const void* embeddings, int token,
                              int dim, int vocab_size);
 
 /* Sampling helpers */

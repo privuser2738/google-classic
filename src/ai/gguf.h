@@ -156,6 +156,7 @@ typedef struct {
         uint32_t block_count;       /* num layers */
         uint32_t attention_head_count;
         uint32_t attention_head_count_kv;
+        uint32_t attention_key_length;   /* head_dim - explicit from GGUF or computed */
         uint32_t feed_forward_length;
         float rope_freq_base;
         float rope_freq_scale;

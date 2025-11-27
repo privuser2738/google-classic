@@ -317,7 +317,12 @@ const char *llm_token_str(llm_ctx_t *ctx, int token) {
 /* Store tensor types for proper dequantization - visible to CUDA module */
 int g_emb_type = GGML_TYPE_F32;
 int g_weight_type = GGML_TYPE_Q4_K;
+int g_v_weight_type = GGML_TYPE_Q4_K;  /* V projection weight type (may differ for gemma3) */
+int g_w1_weight_type = GGML_TYPE_Q4_K;  /* FFN gate weight type */
+int g_w2_weight_type = GGML_TYPE_Q4_K;  /* FFN down weight type */
+int g_w3_weight_type = GGML_TYPE_Q4_K;  /* FFN up weight type */
 int g_output_type = GGML_TYPE_Q4_K;
+int g_emb_vocab_size = 0;  /* Actual embedding vocab size (may differ from metadata) */
 
 static int load_weights(llm_ctx_t *ctx) {
     gguf_ctx_t *gguf = ctx->gguf;
@@ -342,6 +347,14 @@ static int load_weights(llm_ctx_t *ctx) {
     if (t) {
         ctx->weights.tok_embeddings = (void *)gguf_get_tensor_data(gguf, t);
         g_emb_type = t->type;
+        /* Store actual embedding vocab size (may differ from metadata vocab_size) */
+        g_emb_vocab_size = (int)t->dims[1];
+        printf("[TENSOR] token_embd.weight: dims=[%llu,%llu] type=%d\n",
+               (unsigned long long)t->dims[0], (unsigned long long)t->dims[1], t->type);
+        if (g_emb_vocab_size != ctx->config.vocab_size) {
+            printf("[WARN] Embedding vocab size %d differs from metadata vocab_size %d\n",
+                   g_emb_vocab_size, ctx->config.vocab_size);
+        }
     }
 
     /* Output norm */
@@ -353,6 +366,8 @@ static int load_weights(llm_ctx_t *ctx) {
     if (t) {
         ctx->weights.output = (void *)gguf_get_tensor_data(gguf, t);
         g_output_type = t->type;
+        printf("[TENSOR] output.weight: dims=[%llu,%llu] type=%d\n",
+               (unsigned long long)t->dims[0], (unsigned long long)t->dims[1], t->type);
     } else {
         /* Tied embeddings */
         ctx->weights.output = ctx->weights.tok_embeddings;
@@ -371,16 +386,36 @@ static int load_weights(llm_ctx_t *ctx) {
         t = gguf_find_tensor(gguf, name);
         if (t) {
             ctx->weights.layers[l].wq = (void *)gguf_get_tensor_data(gguf, t);
-            if (l == 0) g_weight_type = t->type;
+            if (l == 0) {
+                g_weight_type = t->type;
+                printf("[TENSOR DEBUG] %s: dims=[%llu,%llu] type=%d\n",
+                       name, (unsigned long long)t->dims[0], (unsigned long long)t->dims[1], t->type);
+            }
         }
 
         snprintf(name, sizeof(name), "blk.%d.attn_k.weight", l);
         t = gguf_find_tensor(gguf, name);
-        if (t) ctx->weights.layers[l].wk = (void *)gguf_get_tensor_data(gguf, t);
+        if (t) {
+            ctx->weights.layers[l].wk = (void *)gguf_get_tensor_data(gguf, t);
+            if (l == 0) {
+                printf("[TENSOR DEBUG] %s: dims=[%llu,%llu] type=%d\n",
+                       name, (unsigned long long)t->dims[0], (unsigned long long)t->dims[1], t->type);
+            }
+        }
 
         snprintf(name, sizeof(name), "blk.%d.attn_v.weight", l);
         t = gguf_find_tensor(gguf, name);
-        if (t) ctx->weights.layers[l].wv = (void *)gguf_get_tensor_data(gguf, t);
+        if (t) {
+            ctx->weights.layers[l].wv = (void *)gguf_get_tensor_data(gguf, t);
+            ctx->weights.layers[l].wv_type = t->type;  /* Store per-layer V type */
+            /* Print V weight types for first 10 layers */
+            if (l < 10 || l == n_layers - 1) {
+                printf("[TENSOR] L%d attn_v type=%d\n", l, t->type);
+            }
+            if (l == 0) {
+                g_v_weight_type = t->type;
+            }
+        }
 
         /* QKV biases (Qwen models) */
         snprintf(name, sizeof(name), "blk.%d.attn_q.bias", l);
@@ -395,25 +430,80 @@ static int load_weights(llm_ctx_t *ctx) {
         t = gguf_find_tensor(gguf, name);
         if (t) ctx->weights.layers[l].bv = (float *)gguf_get_tensor_data(gguf, t);
 
+        /* QK-norm weights (Gemma3) */
+        snprintf(name, sizeof(name), "blk.%d.attn_q_norm.weight", l);
+        t = gguf_find_tensor(gguf, name);
+        if (t) {
+            ctx->weights.layers[l].attn_q_norm = (float *)gguf_get_tensor_data(gguf, t);
+            if (l == 0) {
+                printf("[TENSOR DEBUG] Found attn_q_norm (Gemma3 QK-norm)\n");
+            }
+        }
+
+        snprintf(name, sizeof(name), "blk.%d.attn_k_norm.weight", l);
+        t = gguf_find_tensor(gguf, name);
+        if (t) {
+            ctx->weights.layers[l].attn_k_norm = (float *)gguf_get_tensor_data(gguf, t);
+        }
+
         snprintf(name, sizeof(name), "blk.%d.attn_output.weight", l);
         t = gguf_find_tensor(gguf, name);
         if (t) ctx->weights.layers[l].wo = (void *)gguf_get_tensor_data(gguf, t);
+
+        /* Post-attention normalization (Gemma3) */
+        snprintf(name, sizeof(name), "blk.%d.post_attention_norm.weight", l);
+        t = gguf_find_tensor(gguf, name);
+        if (t) {
+            ctx->weights.layers[l].post_attn_norm = (void *)gguf_get_tensor_data(gguf, t);
+            if (l == 0) {
+                printf("[TENSOR DEBUG] Found post_attention_norm (Gemma3)\n");
+            }
+        }
 
         snprintf(name, sizeof(name), "blk.%d.ffn_norm.weight", l);
         t = gguf_find_tensor(gguf, name);
         if (t) ctx->weights.layers[l].ffn_norm = (void *)gguf_get_tensor_data(gguf, t);
 
+        int w1_t = 0, w2_t = 0, w3_t = 0;
         snprintf(name, sizeof(name), "blk.%d.ffn_gate.weight", l);
         t = gguf_find_tensor(gguf, name);
-        if (t) ctx->weights.layers[l].w1 = (void *)gguf_get_tensor_data(gguf, t);
+        if (t) {
+            ctx->weights.layers[l].w1 = (void *)gguf_get_tensor_data(gguf, t);
+            w1_t = t->type;
+            if (l == 0) g_w1_weight_type = t->type;
+        }
 
         snprintf(name, sizeof(name), "blk.%d.ffn_down.weight", l);
         t = gguf_find_tensor(gguf, name);
-        if (t) ctx->weights.layers[l].w2 = (void *)gguf_get_tensor_data(gguf, t);
+        if (t) {
+            ctx->weights.layers[l].w2 = (void *)gguf_get_tensor_data(gguf, t);
+            ctx->weights.layers[l].w2_type = t->type;
+            w2_t = t->type;
+            if (l == 0) g_w2_weight_type = t->type;
+        }
 
         snprintf(name, sizeof(name), "blk.%d.ffn_up.weight", l);
         t = gguf_find_tensor(gguf, name);
-        if (t) ctx->weights.layers[l].w3 = (void *)gguf_get_tensor_data(gguf, t);
+        if (t) {
+            ctx->weights.layers[l].w3 = (void *)gguf_get_tensor_data(gguf, t);
+            w3_t = t->type;
+            if (l == 0) g_w3_weight_type = t->type;
+        }
+
+        /* Print FFN weight types for first 10 layers and last */
+        if (l < 10 || l == n_layers - 1) {
+            printf("[TENSOR] L%d FFN types: w1=%d w2=%d w3=%d\n", l, w1_t, w2_t, w3_t);
+        }
+
+        /* Post-FFN normalization (Gemma3) */
+        snprintf(name, sizeof(name), "blk.%d.post_ffw_norm.weight", l);
+        t = gguf_find_tensor(gguf, name);
+        if (t) {
+            ctx->weights.layers[l].post_ffn_norm = (void *)gguf_get_tensor_data(gguf, t);
+            if (l == 0) {
+                printf("[TENSOR DEBUG] Found post_ffw_norm (Gemma3)\n");
+            }
+        }
     }
 
     return 0;
@@ -530,7 +620,7 @@ llm_ctx_t *llm_load(const char *model_path) {
     ctx->config.n_layers = gguf->model.block_count;
     ctx->config.n_heads = gguf->model.attention_head_count;
     ctx->config.n_kv_heads = gguf->model.attention_head_count_kv;
-    ctx->config.head_dim = ctx->config.embedding_dim / ctx->config.n_heads;
+    ctx->config.head_dim = gguf->model.attention_key_length;  /* Use explicit head_dim from GGUF */
     ctx->config.ffn_dim = gguf->model.feed_forward_length;
     ctx->config.rope_freq_base = gguf->model.rope_freq_base;
     ctx->config.rms_norm_eps = gguf->model.rms_norm_eps;
@@ -548,6 +638,8 @@ llm_ctx_t *llm_load(const char *model_path) {
         llm_free(ctx);
         return NULL;
     }
+    /* Use actual tokenizer vocab size (metadata can be wrong/missing) */
+    ctx->config.vocab_size = ctx->tokenizer.vocab_size;
     printf("  Vocabulary: %d tokens\n", ctx->tokenizer.vocab_size);
 
     /* Load weights */
@@ -735,9 +827,10 @@ void matmul_q(float *dst, const void *M, const float *v,
             break;
         }
         case GGML_TYPE_Q4_K:
+            mat_vec_q4_k(dst, M, v, out_dim, in_dim);
+            break;
         case GGML_TYPE_Q6_K:
-            /* TODO: Implement K-quants */
-            memset(dst, 0, out_dim * sizeof(float));
+            mat_vec_q6_k(dst, M, v, out_dim, in_dim);
             break;
         default:
             memset(dst, 0, out_dim * sizeof(float));
@@ -808,6 +901,20 @@ void get_embedding(float *dst, const void *embeddings, int token,
             }
             break;
         }
+        case GGML_TYPE_Q6_K: {
+            /* Q6_K: 256 values per superblock */
+            int blocks_per_token = dim / QK_K;
+            const block_q6_k *token_blocks = (const block_q6_k *)embeddings + token * blocks_per_token;
+            dequantize_row_q6_k(token_blocks, dst, dim);
+            break;
+        }
+        case GGML_TYPE_Q4_K: {
+            /* Q4_K: 256 values per superblock */
+            int blocks_per_token = dim / QK_K;
+            const block_q4_k *token_blocks = (const block_q4_k *)embeddings + token * blocks_per_token;
+            dequantize_row_q4_k(token_blocks, dst, dim);
+            break;
+        }
         default:
             memset(dst, 0, dim * sizeof(float));
             break;
@@ -838,6 +945,11 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
 
     /* KV cache dimensions */
     int kv_dim = n_kv_heads * head_dim;
+    int q_dim = n_heads * head_dim;  /* Q output dimension (may differ from dim for gemma3) */
+
+    /* Check if this is a Gemma model (needs embedding scaling) */
+    bool is_gemma = (strstr(cfg->arch, "gemma") != NULL);
+    float emb_scale = is_gemma ? sqrtf((float)dim) : 1.0f;
     size_t kv_layer_size = (size_t)kv->max_seq_len * kv_dim;
 
     /* Process each token */
@@ -854,11 +966,15 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
         /* Get token embedding */
         if (w->tok_embeddings) {
             get_embedding(s->x, w->tok_embeddings, token, dim, cfg->vocab_size, g_emb_type);
+            /* Gemma models need embeddings scaled by sqrt(dim) */
+            if (emb_scale != 1.0f) {
+                for (int i = 0; i < dim; i++) {
+                    s->x[i] *= emb_scale;
+                }
+            }
         } else {
             memset(s->x, 0, dim * sizeof(float));
         }
-
-        /* Debug disabled */
 
         /* Process through transformer layers */
         for (int l = 0; l < n_layers; l++) {
@@ -872,14 +988,29 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
                 memcpy(s->xb, s->x, dim * sizeof(float));
             }
 
-            /* QKV projections: q = Wq @ xb, k = Wk @ xb, v = Wv @ xb */
-            matmul_q(s->q, w->layers[l].wq, s->xb, dim, dim, qtype);
+            /* QKV projections: q = Wq @ xb, k = Wk @ xb, v = Wv @ xb
+             * Note: Q output is n_heads * head_dim (may differ from dim for gemma3) */
+            matmul_q(s->q, w->layers[l].wq, s->xb, q_dim, dim, qtype);
             matmul_q(s->k, w->layers[l].wk, s->xb, kv_dim, dim, qtype);
-            matmul_q(s->v, w->layers[l].wv, s->xb, kv_dim, dim, qtype);
+            matmul_q(s->v, w->layers[l].wv, s->xb, kv_dim, dim, w->layers[l].wv_type);
 
             /* Add QKV biases if present (Qwen models) */
             if (w->layers[l].bq) {
-                for (int i = 0; i < dim; i++) s->q[i] += w->layers[l].bq[i];
+                for (int i = 0; i < q_dim; i++) s->q[i] += w->layers[l].bq[i];
+            }
+
+            /* Apply QK-norm (Gemma3) - normalize each head's Q and K vectors */
+            if (w->layers[l].attn_q_norm) {
+                for (int h = 0; h < n_heads; h++) {
+                    rms_norm(s->q + h * head_dim, s->q + h * head_dim,
+                             w->layers[l].attn_q_norm, head_dim, cfg->rms_norm_eps);
+                }
+            }
+            if (w->layers[l].attn_k_norm) {
+                for (int h = 0; h < n_kv_heads; h++) {
+                    rms_norm(s->k + h * head_dim, s->k + h * head_dim,
+                             w->layers[l].attn_k_norm, head_dim, cfg->rms_norm_eps);
+                }
             }
             if (w->layers[l].bk) {
                 for (int i = 0; i < kv_dim; i++) s->k[i] += w->layers[l].bk[i];
@@ -930,7 +1061,7 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
             /* For each query head */
             int kv_heads_per_group = n_kv_heads > 0 ? n_heads / n_kv_heads : 1;
 
-            memset(s->xb2, 0, dim * sizeof(float));
+            memset(s->xb2, 0, q_dim * sizeof(float));  /* MHA output is q_dim = n_heads * head_dim */
 
             for (int h = 0; h < n_heads; h++) {
                 float *q_h = s->q + h * head_dim;
@@ -960,8 +1091,14 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
                 }
             }
 
-            /* Output projection: xb = Wo @ xb2 */
-            matmul_q(s->xb, w->layers[l].wo, s->xb2, dim, dim, qtype);
+            /* Output projection: xb = Wo @ xb2
+             * wo takes q_dim input (MHA output) and produces dim output */
+            matmul_q(s->xb, w->layers[l].wo, s->xb2, dim, q_dim, qtype);
+
+            /* Post-attention normalization (Gemma3) - applied BEFORE residual */
+            if (w->layers[l].post_attn_norm) {
+                rms_norm(s->xb, s->xb, (float*)w->layers[l].post_attn_norm, dim, cfg->rms_norm_eps);
+            }
 
             /* Residual connection */
             vec_add(s->x, s->x, s->xb, dim);
@@ -987,8 +1124,13 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
             silu(s->hb, ffn_dim);
             vec_mul(s->hb, s->hb, s->hb2, ffn_dim);
 
-            /* Down projection */
-            matmul_q(s->xb, w->layers[l].w2, s->hb, dim, ffn_dim, qtype);
+            /* Down projection - use per-layer w2_type for mixed quantization (gemma3) */
+            matmul_q(s->xb, w->layers[l].w2, s->hb, dim, ffn_dim, w->layers[l].w2_type);
+
+            /* Post-FFN normalization (Gemma3) - applied BEFORE residual */
+            if (w->layers[l].post_ffn_norm) {
+                rms_norm(s->xb, s->xb, (float*)w->layers[l].post_ffn_norm, dim, cfg->rms_norm_eps);
+            }
 
             /* Residual connection */
             vec_add(s->x, s->x, s->xb, dim);
@@ -1000,11 +1142,13 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
             rms_norm(s->x, s->x, norm_w, dim, cfg->rms_norm_eps);
         }
 
-        /* Output projection to vocabulary */
+        /* Output projection to vocabulary
+         * Use actual embedding vocab size (may be smaller than metadata vocab_size) */
+        int actual_vocab = g_emb_vocab_size > 0 ? g_emb_vocab_size : cfg->vocab_size;
         if (w->output) {
-            matmul_q(s->logits, w->output, s->x, cfg->vocab_size, dim, g_output_type);
+            matmul_q(s->logits, w->output, s->x, actual_vocab, dim, g_output_type);
         } else {
-            memset(s->logits, 0, cfg->vocab_size * sizeof(float));
+            memset(s->logits, 0, actual_vocab * sizeof(float));
         }
 
         ctx->pos++;
@@ -1027,10 +1171,11 @@ int llm_sample(llm_ctx_t *ctx, const llm_sampler_t *sampler) {
     if (!ctx || !ctx->loaded) return -1;
 
     float *logits = ctx->state.logits;
-    int vocab_size = ctx->config.vocab_size;
+    /* Use actual embedding vocab size to avoid out-of-bounds access */
+    int vocab_size = g_emb_vocab_size > 0 ? g_emb_vocab_size : ctx->config.vocab_size;
 
-    /* Debug: print first few samples (disabled) */
-    if (0 && g_debug_sample_count < 5) {
+    /* Debug: print first few samples */
+    if (g_debug_sample_count < 5) {
         /* Find top 5 logits */
         int top_idx[5] = {0, 1, 2, 3, 4};
         float top_val[5];
@@ -1153,11 +1298,17 @@ int llm_generate(llm_ctx_t *ctx,
     memcpy(ctx->tokens, prompt_tokens, n_prompt * sizeof(int));
     ctx->n_tokens = n_prompt;
 
+    printf("[Generate] Prefill %d tokens...\n", n_prompt);
+    fflush(stdout);
+
     /* Process prompt (prefill) */
     if (llm_forward_auto(ctx, prompt_tokens, n_prompt) != 0) {
         fprintf(stderr, "LLM: Forward pass failed on prompt\n");
         return -1;
     }
+
+    printf("[Generate] Starting token generation...\n");
+    fflush(stdout);
 
     /* Generate new tokens */
     int n_generated = 0;
@@ -1227,14 +1378,15 @@ void llm_print_info(llm_ctx_t *ctx) {
 llm_chat_template_t llm_detect_template(llm_ctx_t *ctx) {
     if (!ctx) return LLM_CHAT_TEMPLATE_NONE;
 
-    /* First, try to read the actual chat_template from GGUF metadata */
+    const char *arch = ctx->config.arch;
+
+    /* Get model name and chat_template from GGUF metadata */
     const char *chat_template = NULL;
+    const char *model_name = NULL;
     if (ctx->gguf) {
         chat_template = gguf_get_string(ctx->gguf, "tokenizer.chat_template");
+        model_name = gguf_get_string(ctx->gguf, "general.name");
     }
-
-    /* Template detection debug (disabled) */
-    (void)chat_template;
 
     /* If we have the actual template string, analyze it */
     if (chat_template && chat_template[0]) {
@@ -1269,12 +1421,51 @@ llm_chat_template_t llm_detect_template(llm_ctx_t *ctx) {
         }
     }
 
-    /* Fall back to vocabulary-based detection */
+    /* PRIORITY: Check model name and architecture BEFORE vocabulary scan
+     * Many models have ChatML tokens in vocabulary but don't use them */
+
+    /* Check model name first (more specific than architecture) */
+    if (model_name) {
+        /* Mistral-family models: many use ChatML despite the name */
+        if (strstr(model_name, "istral") || strstr(model_name, "ISTRAL")) {
+            return LLM_CHAT_TEMPLATE_CHATML;  /* Changed: try ChatML */
+        }
+        if (strstr(model_name, "wen") || strstr(model_name, "WEN")) {
+            return LLM_CHAT_TEMPLATE_CHATML;
+        }
+    }
+
+    /* Check architecture name */
+    /* Note: Many Mistral-family models have been fine-tuned on ChatML format
+     * despite using the Mistral architecture. We try ChatML for these. */
+    if (strstr(arch, "mistral") || strstr(arch, "Mistral") ||
+        strstr(arch, "ministral") || strstr(arch, "Ministral")) {
+        return LLM_CHAT_TEMPLATE_CHATML;  /* Changed: Try ChatML instead */
+    }
+
+    /* DEBUG: For llama arch that doesn't have other matches, try [INST] format */
+    if (strstr(arch, "llama")) {
+        return LLM_CHAT_TEMPLATE_LLAMA2;
+    }
+    if (strstr(arch, "qwen") || strstr(arch, "Qwen")) {
+        return LLM_CHAT_TEMPLATE_CHATML;
+    }
+    if (strstr(arch, "phi") || strstr(arch, "Phi")) {
+        return LLM_CHAT_TEMPLATE_PHI;
+    }
+    if (strstr(arch, "gemma") || strstr(arch, "Gemma")) {
+        return LLM_CHAT_TEMPLATE_GEMMA;
+    }
+    if (strstr(arch, "zephyr") || strstr(arch, "Zephyr")) {
+        return LLM_CHAT_TEMPLATE_ZEPHYR;
+    }
+
+    /* Fall back to vocabulary-based detection for unknown architectures */
     bool has_chatml = false;
     bool has_llama3 = false;
     bool has_gemma = false;
 
-    /* Scan full vocabulary for special tokens (they may be at the end) */
+    /* Scan vocabulary for special tokens (limit scan for performance) */
     int scan_limit = ctx->tokenizer.vocab_size;
     for (int i = 0; i < scan_limit; i++) {
         const char *tok = ctx->tokenizer.vocab[i];
@@ -1301,27 +1492,9 @@ llm_chat_template_t llm_detect_template(llm_ctx_t *ctx) {
         return LLM_CHAT_TEMPLATE_GEMMA;
     }
 
-    /* Fall back to architecture name */
-    const char *arch = ctx->config.arch;
-
-    if (strstr(arch, "mistral") || strstr(arch, "Mistral") ||
-        strstr(arch, "ministral") || strstr(arch, "Ministral")) {
-        return LLM_CHAT_TEMPLATE_MISTRAL_V1;
-    }
+    /* Final fallback: llama uses LLAMA2 format */
     if (strstr(arch, "llama") || strstr(arch, "Llama")) {
         return LLM_CHAT_TEMPLATE_LLAMA2;
-    }
-    if (strstr(arch, "gemma") || strstr(arch, "Gemma")) {
-        return LLM_CHAT_TEMPLATE_GEMMA;
-    }
-    if (strstr(arch, "phi") || strstr(arch, "Phi")) {
-        return LLM_CHAT_TEMPLATE_PHI;
-    }
-    if (strstr(arch, "qwen") || strstr(arch, "Qwen")) {
-        return LLM_CHAT_TEMPLATE_CHATML;
-    }
-    if (strstr(arch, "zephyr") || strstr(arch, "Zephyr")) {
-        return LLM_CHAT_TEMPLATE_ZEPHYR;
     }
 
     /* Default to no template - use raw text */
@@ -1344,9 +1517,9 @@ int llm_format_chat(llm_ctx_t *ctx, char *output, int max_len,
             break;
 
         case LLM_CHAT_TEMPLATE_MISTRAL_V1:
-            /* Mistral native format: <s>role\nmessage</s>\n
-             * Note: <s> and </s> are BOS (token 1) and EOS (token 2)
-             * We insert these as literal strings - the tokenizer converts them */
+            /* Mistral/Ministral native format from chat_template:
+             * bos_token + role + '\n' + content + eos_token
+             * Format: <s>user\nmessage</s>\n<s>assistant\n */
             len = snprintf(output, max_len,
                 "<s>user\n%s</s>\n<s>assistant\n",
                 user_message);
@@ -1419,6 +1592,12 @@ static bool is_eot_token(llm_ctx_t *ctx, int token) {
         return true;
     }
 
+    /* Detect partial control tokens that indicate template confusion */
+    if (strstr(str, "<|im_") != NULL) return true;
+    if (strstr(str, "|>user") != NULL) return true;
+    if (strstr(str, "<|") != NULL && strlen(str) <= 4) return true;  /* Partial control */
+    if (strcmp(str, "im_") == 0) return true;  /* Partial control */
+
     return false;
 }
 
@@ -1433,9 +1612,21 @@ int llm_chat(llm_ctx_t *ctx,
     /* Detect and apply chat template */
     llm_chat_template_t template_type = llm_detect_template(ctx);
 
-    /* Override for specific architectures */
+    /* Override for specific architectures or when ChatML tokens are detected in output */
     if (strstr(ctx->config.arch, "qwen")) {
         template_type = LLM_CHAT_TEMPLATE_CHATML;
+    }
+
+    /* For llama-based models, check if vocabulary has ChatML tokens - if so, use ChatML */
+    if (strstr(ctx->config.arch, "llama") && template_type != LLM_CHAT_TEMPLATE_CHATML) {
+        /* Quick scan for ChatML special tokens in vocabulary */
+        for (int i = 0; i < ctx->tokenizer.vocab_size && i < 33000; i++) {
+            const char *tok = ctx->tokenizer.vocab[i];
+            if (tok && (strstr(tok, "<|im_start|>") || strstr(tok, "<|im_end|>"))) {
+                template_type = LLM_CHAT_TEMPLATE_CHATML;
+                break;
+            }
+        }
     }
 
     char formatted_prompt[8192];
@@ -1468,8 +1659,6 @@ int llm_chat(llm_ctx_t *ctx,
         return -1;
     }
 
-    /* Debug disabled */
-
     /* Copy prompt tokens to context */
     if (n_prompt > ctx->max_tokens) {
         n_prompt = ctx->max_tokens;
@@ -1477,11 +1666,17 @@ int llm_chat(llm_ctx_t *ctx,
     memcpy(ctx->tokens, prompt_tokens, n_prompt * sizeof(int));
     ctx->n_tokens = n_prompt;
 
+    printf("[Chat] Prefill %d tokens (template=%d)...\n", n_prompt, (int)template_type);
+    fflush(stdout);
+
     /* Process prompt (prefill) */
     if (llm_forward_auto(ctx, prompt_tokens, n_prompt) != 0) {
         fprintf(stderr, "LLM: Forward pass failed on prompt\n");
         return -1;
     }
+
+    printf("[Chat] Generating up to %d tokens...\n", max_new_tokens);
+    fflush(stdout);
 
     /* Generate new tokens */
     int n_generated = 0;
@@ -1490,8 +1685,15 @@ int llm_chat(llm_ctx_t *ctx,
         /* Sample next token */
         int token = llm_sample(ctx, sampler);
 
+        if (i < 5) {
+            printf("[Chat] Sampled token %d = %d\n", i, token);
+            fflush(stdout);
+        }
+
         /* Check for EOS or end-of-turn markers */
         if (is_eot_token(ctx, token)) {
+            printf("[Chat] Got EOT token %d\n", token);
+            fflush(stdout);
             break;
         }
 
@@ -1519,3 +1721,33 @@ int llm_chat(llm_ctx_t *ctx,
 
     return n_generated;
 }
+
+/* ============================================================================
+ * CUDA Stubs (when not compiled with CUDA support)
+ * ============================================================================ */
+
+#ifndef HOLO_USE_CUDA
+
+int llm_cuda_init(llm_ctx_t *ctx) {
+    (void)ctx;
+    return -1;  /* CUDA not available */
+}
+
+void llm_cuda_cleanup(void) {
+    /* No-op */
+}
+
+bool llm_cuda_available(void) {
+    return false;
+}
+
+void llm_cuda_reset(void) {
+    /* No-op */
+}
+
+int llm_forward_auto(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
+    /* Fall back to CPU when CUDA not available */
+    return llm_forward(ctx, tokens, n_tokens);
+}
+
+#endif /* HOLO_USE_CUDA */

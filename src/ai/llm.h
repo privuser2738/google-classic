@@ -95,10 +95,24 @@ typedef struct {
         float *bk;              /* Key bias [kv_dim] */
         float *bv;              /* Value bias [kv_dim] */
 
-        void *ffn_norm;         /* FFN RMS norm weight */
+        /* QK-norm weights (Gemma3) - replaces soft-capping */
+        float *attn_q_norm;     /* Query norm weight [head_dim] */
+        float *attn_k_norm;     /* Key norm weight [head_dim] */
+
+        /* Post-attention normalization (Gemma3) */
+        void *post_attn_norm;   /* Post-attention RMS norm weight */
+
+        void *ffn_norm;         /* FFN RMS norm weight (pre-FFN) */
         void *w1;               /* FFN gate projection (or up for some models) */
         void *w2;               /* FFN down projection */
         void *w3;               /* FFN up projection (SwiGLU) */
+
+        /* Per-layer weight types (may differ between layers in mixed-quant models) */
+        int wv_type;            /* V projection weight quantization type */
+        int w2_type;            /* FFN down weight quantization type */
+
+        /* Post-FFN normalization (Gemma3) */
+        void *post_ffn_norm;    /* Post-FFN RMS norm weight */
     } *layers;
 
     /* Output */

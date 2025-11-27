@@ -49,7 +49,16 @@
       "Bash(\"C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe\" -latest -property installationPath)",
       "Bash(cmd //c:*)",
       "WebSearch",
-      "Bash(./build-cuda.bat)"
+      "Bash(./build-cuda.bat)",
+      "Bash(export HOLO_DISABLE_CUDA=1)",
+      "Bash(ollama show:*)",
+      "Bash(ollama list:*)",
+      "Bash(echo \"load C:/Users/rob/.ollama/models/blobs/sha256-a3cd73c52e932a714781e12b94770fb4d8390e5a65d49e6ed7e5fd85a92c3e74\nHello\nexit\")",
+      "Bash(echo:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(HOLO_DISABLE_CUDA=1 printf:*)",
+      "Bash(ollama run:*)"
     ],
     "deny": [],
     "ask": []

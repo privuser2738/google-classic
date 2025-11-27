@@ -245,42 +245,27 @@ void dequantize_row_q6_k(const block_q6_k *x, float *y, int k) {
         float d = f16_to_f32(x[i].d);
         const uint8_t *ql = x[i].ql;
         const uint8_t *qh = x[i].qh;
-        const int8_t *scales = x[i].scales;
+        const int8_t *sc = x[i].scales;
 
+        /* Q6_K layout (from llama.cpp dequantize_row_q6_K):
+         * - Two 128-value chunks per block
+         * - Each l from 0..31 produces 4 values at positions l, l+32, l+64, l+96 */
         for (int n = 0; n < QK_K; n += 128) {
-            for (int l = 0; l < 32; l++) {
-                int is = n / 16 + l / 16;
-                float sc = d * scales[is];
-
-                int idx = n + l;
-                uint8_t q_lo = ql[idx / 2];
-                uint8_t q_hi = qh[idx / 4];
-
-                int shift_lo = (idx % 2) * 4;
-                int shift_hi = (idx % 4) * 2;
-
-                int8_t q = ((q_lo >> shift_lo) & 0xF) | (((q_hi >> shift_hi) & 0x3) << 4);
-                q -= 32;
-
-                y[i * QK_K + idx] = sc * q;
+            for (int l = 0; l < 32; ++l) {
+                int is = l / 16;
+                int8_t q1 = (int8_t)((ql[l +  0] & 0xF) | (((qh[l] >> 0) & 3) << 4)) - 32;
+                int8_t q2 = (int8_t)((ql[l + 32] & 0xF) | (((qh[l] >> 2) & 3) << 4)) - 32;
+                int8_t q3 = (int8_t)((ql[l +  0]  >> 4) | (((qh[l] >> 4) & 3) << 4)) - 32;
+                int8_t q4 = (int8_t)((ql[l + 32]  >> 4) | (((qh[l] >> 6) & 3) << 4)) - 32;
+                y[l +  0] = d * sc[is + 0] * q1;
+                y[l + 32] = d * sc[is + 2] * q2;
+                y[l + 64] = d * sc[is + 4] * q3;
+                y[l + 96] = d * sc[is + 6] * q4;
             }
-
-            for (int l = 32; l < 64; l++) {
-                int is = n / 16 + l / 16;
-                float sc = d * scales[is];
-
-                int idx = n + l;
-                uint8_t q_lo = ql[(idx - 32) / 2 + 64];
-                uint8_t q_hi = qh[(idx - 32) / 4 + 32];
-
-                int shift_lo = ((idx - 32) % 2) * 4;
-                int shift_hi = ((idx - 32) % 4) * 2;
-
-                int8_t q = ((q_lo >> shift_lo) & 0xF) | (((q_hi >> shift_hi) & 0x3) << 4);
-                q -= 32;
-
-                y[i * QK_K + idx] = sc * q;
-            }
+            y  += 128;
+            ql += 64;
+            qh += 32;
+            sc += 8;
         }
     }
 }
