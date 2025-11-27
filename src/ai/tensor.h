@@ -69,6 +69,8 @@ void relu(float *x, int n);
 
 /* RMS Normalization: x = x / sqrt(mean(x^2) + eps) * weight */
 void rms_norm(float *dst, const float *x, const float *weight, int n, float eps);
+/* Gemma-style RMS norm: uses (1 + weight) for scale */
+void rms_norm_gemma(float *dst, const float *x, const float *weight, int n, float eps);
 
 /* Layer Normalization */
 void layer_norm(float *dst, const float *x, const float *weight, const float *bias, int n, float eps);

@@ -60,7 +60,9 @@
       "Bash(HOLO_DISABLE_CUDA=1 printf:*)",
       "Bash(ollama run:*)",
       "Bash(cat:*)",
-      "WebFetch(domain:arxiv.org)"
+      "WebFetch(domain:arxiv.org)",
+      "Bash(git checkout:*)",
+      "Bash(unzip:*)"
     ],
     "deny": [],
     "ask": []

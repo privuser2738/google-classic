@@ -315,7 +315,7 @@ static holo_result_t cmd_chat(holo_context_t *ctx, int argc, char **argv) {
     g_token_count = 0;
     llm_sampler_t sampler = LLM_SAMPLER_DEFAULT;
     sampler.temperature = 0.0f;  /* Greedy decoding for now */
-    int generated = llm_chat(g_llm, message, 64, &sampler, token_callback, NULL);
+    int generated = llm_chat(g_llm, message, 512, &sampler, token_callback, NULL);
 
     if (generated < 0) {
         holo_print("(generation error)\n");

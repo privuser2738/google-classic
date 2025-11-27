@@ -254,6 +254,20 @@ void rms_norm(float *dst, const float *x, const float *weight, int n, float eps)
     }
 }
 
+/* Gemma-style RMS norm: uses (1 + weight) instead of weight
+ * Gemma models initialize norm weights to 0 for effective scale of 1 */
+void rms_norm_gemma(float *dst, const float *x, const float *weight, int n, float eps) {
+    float sum_sq = 0.0f;
+    for (int i = 0; i < n; i++) {
+        sum_sq += x[i] * x[i];
+    }
+    float rms = sqrtf(sum_sq / n + eps);
+    float scale = 1.0f / rms;
+    for (int i = 0; i < n; i++) {
+        dst[i] = x[i] * scale * (1.0f + weight[i]);
+    }
+}
+
 void layer_norm(float *dst, const float *x, const float *weight, const float *bias, int n, float eps) {
     /* Calculate mean */
     float mean = 0.0f;

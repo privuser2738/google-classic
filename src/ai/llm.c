@@ -14,6 +14,9 @@
 #include <time.h>
 #include <math.h>
 
+/* Enable verbose debug output (set to 0 for production) */
+#define LLM_DEBUG_VERBOSE 0
+
 /* ============================================================================
  * Memory Allocation Helpers
  * ============================================================================ */
@@ -349,12 +352,14 @@ static int load_weights(llm_ctx_t *ctx) {
         g_emb_type = t->type;
         /* Store actual embedding vocab size (may differ from metadata vocab_size) */
         g_emb_vocab_size = (int)t->dims[1];
+#if LLM_DEBUG_VERBOSE
         printf("[TENSOR] token_embd.weight: dims=[%llu,%llu] type=%d\n",
                (unsigned long long)t->dims[0], (unsigned long long)t->dims[1], t->type);
         if (g_emb_vocab_size != ctx->config.vocab_size) {
             printf("[WARN] Embedding vocab size %d differs from metadata vocab_size %d\n",
                    g_emb_vocab_size, ctx->config.vocab_size);
         }
+#endif
     }
 
     /* Output norm */
@@ -366,8 +371,10 @@ static int load_weights(llm_ctx_t *ctx) {
     if (t) {
         ctx->weights.output = (void *)gguf_get_tensor_data(gguf, t);
         g_output_type = t->type;
+#if LLM_DEBUG_VERBOSE
         printf("[TENSOR] output.weight: dims=[%llu,%llu] type=%d\n",
                (unsigned long long)t->dims[0], (unsigned long long)t->dims[1], t->type);
+#endif
     } else {
         /* Tied embeddings */
         ctx->weights.output = ctx->weights.tok_embeddings;
@@ -380,7 +387,17 @@ static int load_weights(llm_ctx_t *ctx) {
 
         snprintf(name, sizeof(name), "blk.%d.attn_norm.weight", l);
         t = gguf_find_tensor(gguf, name);
-        if (t) ctx->weights.layers[l].attn_norm = (void *)gguf_get_tensor_data(gguf, t);
+        if (t) {
+            ctx->weights.layers[l].attn_norm = (void *)gguf_get_tensor_data(gguf, t);
+#if LLM_DEBUG_VERBOSE
+            if (l == 0) {
+                float *nw = (float *)ctx->weights.layers[l].attn_norm;
+                float sumv = 0;
+                for (int i = 0; i < (int)t->dims[0]; i++) sumv += nw[i];
+                printf("[TENSOR DEBUG] attn_norm mean=%.4f (should be ~0 if not baked)\n", sumv / t->dims[0]);
+            }
+#endif
+        }
 
         snprintf(name, sizeof(name), "blk.%d.attn_q.weight", l);
         t = gguf_find_tensor(gguf, name);
@@ -388,8 +405,10 @@ static int load_weights(llm_ctx_t *ctx) {
             ctx->weights.layers[l].wq = (void *)gguf_get_tensor_data(gguf, t);
             if (l == 0) {
                 g_weight_type = t->type;
+#if LLM_DEBUG_VERBOSE
                 printf("[TENSOR DEBUG] %s: dims=[%llu,%llu] type=%d\n",
                        name, (unsigned long long)t->dims[0], (unsigned long long)t->dims[1], t->type);
+#endif
             }
         }
 
@@ -397,10 +416,12 @@ static int load_weights(llm_ctx_t *ctx) {
         t = gguf_find_tensor(gguf, name);
         if (t) {
             ctx->weights.layers[l].wk = (void *)gguf_get_tensor_data(gguf, t);
+#if LLM_DEBUG_VERBOSE
             if (l == 0) {
                 printf("[TENSOR DEBUG] %s: dims=[%llu,%llu] type=%d\n",
                        name, (unsigned long long)t->dims[0], (unsigned long long)t->dims[1], t->type);
             }
+#endif
         }
 
         snprintf(name, sizeof(name), "blk.%d.attn_v.weight", l);
@@ -408,10 +429,6 @@ static int load_weights(llm_ctx_t *ctx) {
         if (t) {
             ctx->weights.layers[l].wv = (void *)gguf_get_tensor_data(gguf, t);
             ctx->weights.layers[l].wv_type = t->type;  /* Store per-layer V type */
-            /* Print V weight types for first 10 layers */
-            if (l < 10 || l == n_layers - 1) {
-                printf("[TENSOR] L%d attn_v type=%d\n", l, t->type);
-            }
             if (l == 0) {
                 g_v_weight_type = t->type;
             }
@@ -435,9 +452,6 @@ static int load_weights(llm_ctx_t *ctx) {
         t = gguf_find_tensor(gguf, name);
         if (t) {
             ctx->weights.layers[l].attn_q_norm = (float *)gguf_get_tensor_data(gguf, t);
-            if (l == 0) {
-                printf("[TENSOR DEBUG] Found attn_q_norm (Gemma3 QK-norm)\n");
-            }
         }
 
         snprintf(name, sizeof(name), "blk.%d.attn_k_norm.weight", l);
@@ -455,15 +469,6 @@ static int load_weights(llm_ctx_t *ctx) {
         t = gguf_find_tensor(gguf, name);
         if (t) {
             ctx->weights.layers[l].post_attn_norm = (void *)gguf_get_tensor_data(gguf, t);
-            if (l == 0) {
-                float *nw = (float *)ctx->weights.layers[l].post_attn_norm;
-                uint8_t *raw = (uint8_t *)nw;
-                printf("[TENSOR DEBUG] Found post_attention_norm (Gemma3) type=%d dims=%llu\n",
-                       t->type, (unsigned long long)t->dims[0]);
-                printf("[TENSOR DEBUG] Raw bytes[0..7]: %02x %02x %02x %02x %02x %02x %02x %02x\n",
-                       raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7]);
-                printf("[TENSOR DEBUG] As F32: %.6f %.6f\n", nw[0], nw[1]);
-            }
         }
 
         snprintf(name, sizeof(name), "blk.%d.ffn_norm.weight", l);
@@ -496,20 +501,13 @@ static int load_weights(llm_ctx_t *ctx) {
             if (l == 0) g_w3_weight_type = t->type;
         }
 
-        /* Print FFN weight types for first 10 layers and last */
-        if (l < 10 || l == n_layers - 1) {
-            printf("[TENSOR] L%d FFN types: w1=%d w2=%d w3=%d\n", l, w1_t, w2_t, w3_t);
-        }
-
         /* Post-FFN normalization (Gemma3) */
         snprintf(name, sizeof(name), "blk.%d.post_ffw_norm.weight", l);
         t = gguf_find_tensor(gguf, name);
         if (t) {
             ctx->weights.layers[l].post_ffn_norm = (void *)gguf_get_tensor_data(gguf, t);
-            if (l == 0) {
-                printf("[TENSOR DEBUG] Found post_ffw_norm (Gemma3)\n");
-            }
         }
+        (void)w1_t; (void)w2_t; (void)w3_t;  /* Suppress unused warning */
     }
 
     return 0;
@@ -609,6 +607,8 @@ llm_ctx_t *llm_load(const char *model_path) {
         fprintf(stderr, "Error: Failed to open model file\n");
         return NULL;
     }
+
+    /* DEBUG: Tensor listing disabled for cleaner output */
 
     /* Allocate context */
     llm_ctx_t *ctx = calloc(1, sizeof(llm_ctx_t));
@@ -978,17 +978,6 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
         /* Get token embedding */
         if (w->tok_embeddings) {
             get_embedding(s->x, w->tok_embeddings, token, dim, cfg->vocab_size, g_emb_type);
-            /* Debug: print embedding stats on first token */
-            if (t == 0 && pos == 0) {
-                float sum = 0, min = s->x[0], max = s->x[0];
-                for (int i = 0; i < dim; i++) {
-                    sum += s->x[i] > 0 ? s->x[i] : -s->x[i];
-                    if (s->x[i] < min) min = s->x[i];
-                    if (s->x[i] > max) max = s->x[i];
-                }
-                printf("[DEBUG] Embedding token=%d: x[0..3]=%.3f %.3f %.3f %.3f sum=%.1f min=%.2f max=%.2f\n",
-                       token, s->x[0], s->x[1], s->x[2], s->x[3], sum, min, max);
-            }
             /* Gemma models need embeddings scaled by sqrt(dim) */
             if (emb_scale != 1.0f) {
                 for (int i = 0; i < dim; i++) {
@@ -1006,7 +995,11 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
             /* RMSNorm before attention */
             if (w->layers[l].attn_norm) {
                 float *norm_w = (float *)w->layers[l].attn_norm;
-                rms_norm(s->xb, s->x, norm_w, dim, cfg->rms_norm_eps);
+                if (is_gemma) {
+                    rms_norm(s->xb, s->x, norm_w, dim, cfg->rms_norm_eps);
+                } else {
+                    rms_norm(s->xb, s->x, norm_w, dim, cfg->rms_norm_eps);
+                }
             } else {
                 memcpy(s->xb, s->x, dim * sizeof(float));
             }
@@ -1025,14 +1018,24 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
             /* Apply QK-norm (Gemma3) - normalize each head's Q and K vectors */
             if (w->layers[l].attn_q_norm) {
                 for (int h = 0; h < n_heads; h++) {
-                    rms_norm(s->q + h * head_dim, s->q + h * head_dim,
-                             w->layers[l].attn_q_norm, head_dim, cfg->rms_norm_eps);
+                    if (is_gemma) {
+                        rms_norm(s->q + h * head_dim, s->q + h * head_dim,
+                                 w->layers[l].attn_q_norm, head_dim, cfg->rms_norm_eps);
+                    } else {
+                        rms_norm(s->q + h * head_dim, s->q + h * head_dim,
+                                 w->layers[l].attn_q_norm, head_dim, cfg->rms_norm_eps);
+                    }
                 }
             }
             if (w->layers[l].attn_k_norm) {
                 for (int h = 0; h < n_kv_heads; h++) {
-                    rms_norm(s->k + h * head_dim, s->k + h * head_dim,
-                             w->layers[l].attn_k_norm, head_dim, cfg->rms_norm_eps);
+                    if (is_gemma) {
+                        rms_norm(s->k + h * head_dim, s->k + h * head_dim,
+                                 w->layers[l].attn_k_norm, head_dim, cfg->rms_norm_eps);
+                    } else {
+                        rms_norm(s->k + h * head_dim, s->k + h * head_dim,
+                                 w->layers[l].attn_k_norm, head_dim, cfg->rms_norm_eps);
+                    }
                 }
             }
             if (w->layers[l].bk) {
@@ -1122,58 +1125,13 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
              * wo takes q_dim input (MHA output) and produces dim output */
             matmul_q(s->xb, w->layers[l].wo, s->xb2, dim, q_dim, qtype);
 
-            /* Debug L0: check values at each step */
-            if (t == 0 && pos == 0 && l == 0) {
-                float xmax = 0;
-                for (int i = 0; i < dim; i++) {
-                    float av = s->xb[i] > 0 ? s->xb[i] : -s->xb[i];
-                    if (av > xmax) xmax = av;
-                }
-                printf("[DEBUG L0] After Wo: xb max_abs=%.1f xb[0..3]=%.3f %.3f %.3f %.3f\n",
-                       xmax, s->xb[0], s->xb[1], s->xb[2], s->xb[3]);
-            }
-
             /* Post-attention normalization (Gemma3) - applied BEFORE residual */
             if (w->layers[l].post_attn_norm) {
-                /* Debug: check norm weights */
-                if (t == 0 && pos == 0 && l == 0) {
-                    float *nw = (float*)w->layers[l].post_attn_norm;
-                    float wmax = 0, wmin = nw[0];
-                    int max_idx = 0, min_idx = 0;
-                    for (int i = 0; i < dim; i++) {
-                        if (nw[i] > wmax) { wmax = nw[i]; max_idx = i; }
-                        if (nw[i] < wmin) { wmin = nw[i]; min_idx = i; }
-                    }
-                    printf("[DEBUG L0] post_attn_norm weights: min=%.3f[@%d] max=%.3f[@%d] w[0..3]=%.3f %.3f %.3f %.3f\n",
-                           wmin, min_idx, wmax, max_idx, nw[0], nw[1], nw[2], nw[3]);
-                }
                 rms_norm(s->xb, s->xb, (float*)w->layers[l].post_attn_norm, dim, cfg->rms_norm_eps);
-            }
-
-            /* Debug L0: after post_attn_norm */
-            if (t == 0 && pos == 0 && l == 0) {
-                float xmax = 0;
-                for (int i = 0; i < dim; i++) {
-                    float av = s->xb[i] > 0 ? s->xb[i] : -s->xb[i];
-                    if (av > xmax) xmax = av;
-                }
-                printf("[DEBUG L0] After post_attn_norm: xb max_abs=%.1f xb[0..3]=%.3f %.3f %.3f %.3f\n",
-                       xmax, s->xb[0], s->xb[1], s->xb[2], s->xb[3]);
             }
 
             /* Residual connection */
             vec_add(s->x, s->x, s->xb, dim);
-
-            /* Debug L0: after attn residual */
-            if (t == 0 && pos == 0 && l == 0) {
-                float xmax = 0;
-                for (int i = 0; i < dim; i++) {
-                    float av = s->x[i] > 0 ? s->x[i] : -s->x[i];
-                    if (av > xmax) xmax = av;
-                }
-                printf("[DEBUG L0] After attn residual: x max_abs=%.1f x[0..3]=%.3f %.3f %.3f %.3f\n",
-                       xmax, s->x[0], s->x[1], s->x[2], s->x[3]);
-            }
 
             /* ----- FFN Block ----- */
 
@@ -1196,84 +1154,22 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
             silu(s->hb, ffn_dim);
             vec_mul(s->hb, s->hb, s->hb2, ffn_dim);
 
-            /* Debug L0: after SwiGLU gating */
-            if (t == 0 && pos == 0 && l == 0) {
-                float xmax = 0;
-                for (int i = 0; i < ffn_dim; i++) {
-                    float av = s->hb[i] > 0 ? s->hb[i] : -s->hb[i];
-                    if (av > xmax) xmax = av;
-                }
-                printf("[DEBUG L0] After SwiGLU: hb max_abs=%.1f hb[0..3]=%.3f %.3f %.3f %.3f\n",
-                       xmax, s->hb[0], s->hb[1], s->hb[2], s->hb[3]);
-            }
-
             /* Down projection - use per-layer w2_type for mixed quantization (gemma3) */
             matmul_q(s->xb, w->layers[l].w2, s->hb, dim, ffn_dim, w->layers[l].w2_type);
-
-            /* Debug L0: after W2 (down projection) */
-            if (t == 0 && pos == 0 && l == 0) {
-                float xmax = 0;
-                for (int i = 0; i < dim; i++) {
-                    float av = s->xb[i] > 0 ? s->xb[i] : -s->xb[i];
-                    if (av > xmax) xmax = av;
-                }
-                printf("[DEBUG L0] After W2: xb max_abs=%.1f xb[0..3]=%.3f %.3f %.3f %.3f\n",
-                       xmax, s->xb[0], s->xb[1], s->xb[2], s->xb[3]);
-            }
 
             /* Post-FFN normalization (Gemma3) - applied BEFORE residual */
             if (w->layers[l].post_ffn_norm) {
                 rms_norm(s->xb, s->xb, (float*)w->layers[l].post_ffn_norm, dim, cfg->rms_norm_eps);
             }
 
-            /* Debug L0: after post_ffn_norm */
-            if (t == 0 && pos == 0 && l == 0) {
-                float xmax = 0;
-                for (int i = 0; i < dim; i++) {
-                    float av = s->xb[i] > 0 ? s->xb[i] : -s->xb[i];
-                    if (av > xmax) xmax = av;
-                }
-                printf("[DEBUG L0] After post_ffn_norm: xb max_abs=%.1f xb[0..3]=%.3f %.3f %.3f %.3f\n",
-                       xmax, s->xb[0], s->xb[1], s->xb[2], s->xb[3]);
-            }
-
             /* Residual connection */
             vec_add(s->x, s->x, s->xb, dim);
-
-            /* Debug: track which layer explodes (first token, first 5 layers) */
-            if (t == 0 && pos == 0 && l < 5) {
-                float xmax = s->x[0];
-                for (int i = 1; i < dim; i++) {
-                    float av = s->x[i] > 0 ? s->x[i] : -s->x[i];
-                    if (av > xmax) xmax = av;
-                }
-                printf("[DEBUG] L%d end: x[0..3]=%.3f %.3f %.3f %.3f max_abs=%.1f\n",
-                       l, s->x[0], s->x[1], s->x[2], s->x[3], xmax);
-            }
-        }
-
-        /* Debug: print x after layers (first token only) */
-        if (t == 0 && pos == 0) {
-            float sum = 0, min = s->x[0], max = s->x[0];
-            for (int i = 0; i < dim; i++) {
-                sum += s->x[i] > 0 ? s->x[i] : -s->x[i];
-                if (s->x[i] < min) min = s->x[i];
-                if (s->x[i] > max) max = s->x[i];
-            }
-            printf("[DEBUG] After layers: x[0..3]=%.3f %.3f %.3f %.3f sum=%.1f min=%.2f max=%.2f\n",
-                   s->x[0], s->x[1], s->x[2], s->x[3], sum, min, max);
         }
 
         /* Final RMSNorm */
         if (w->norm) {
             float *norm_w = (float *)w->norm;
             rms_norm(s->x, s->x, norm_w, dim, cfg->rms_norm_eps);
-        }
-
-        /* Debug: print x after final norm (first token only) */
-        if (t == 0 && pos == 0) {
-            printf("[DEBUG] After final norm: x[0..3]=%.3f %.3f %.3f %.3f\n",
-                   s->x[0], s->x[1], s->x[2], s->x[3]);
         }
 
         /* Output projection to vocabulary
@@ -1283,17 +1179,6 @@ int llm_forward(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
             matmul_q(s->logits, w->output, s->x, actual_vocab, dim, g_output_type);
         } else {
             memset(s->logits, 0, actual_vocab * sizeof(float));
-        }
-
-        /* Debug: print logits stats (first token only) */
-        if (t == 0 && pos == 0) {
-            float lmin = s->logits[0], lmax = s->logits[0];
-            for (int i = 1; i < actual_vocab; i++) {
-                if (s->logits[i] < lmin) lmin = s->logits[i];
-                if (s->logits[i] > lmax) lmax = s->logits[i];
-            }
-            printf("[DEBUG] Logits: min=%.2f max=%.2f logits[0..3]=%.2f %.2f %.2f %.2f\n",
-                   lmin, lmax, s->logits[0], s->logits[1], s->logits[2], s->logits[3]);
         }
 
         ctx->pos++;
@@ -1318,46 +1203,6 @@ int llm_sample(llm_ctx_t *ctx, const llm_sampler_t *sampler) {
     float *logits = ctx->state.logits;
     /* Use actual embedding vocab size to avoid out-of-bounds access */
     int vocab_size = g_emb_vocab_size > 0 ? g_emb_vocab_size : ctx->config.vocab_size;
-
-    /* Debug: print first few samples */
-    if (g_debug_sample_count < 5) {
-        /* Find top 5 logits */
-        int top_idx[5] = {0, 1, 2, 3, 4};
-        float top_val[5];
-        for (int i = 0; i < 5; i++) top_val[i] = logits[i];
-
-        for (int i = 5; i < vocab_size; i++) {
-            /* Find min in top 5 */
-            int min_j = 0;
-            for (int j = 1; j < 5; j++) {
-                if (top_val[j] < top_val[min_j]) min_j = j;
-            }
-            if (logits[i] > top_val[min_j]) {
-                top_val[min_j] = logits[i];
-                top_idx[min_j] = i;
-            }
-        }
-
-        /* Sort top 5 */
-        for (int i = 0; i < 4; i++) {
-            for (int j = i+1; j < 5; j++) {
-                if (top_val[j] > top_val[i]) {
-                    float tv = top_val[i]; top_val[i] = top_val[j]; top_val[j] = tv;
-                    int ti = top_idx[i]; top_idx[i] = top_idx[j]; top_idx[j] = ti;
-                }
-            }
-        }
-
-        fprintf(stderr, "[DEBUG] Sample %d - Top logits (EOS=%d logit=%.2f):\n",
-                g_debug_sample_count, ctx->config.eos_token,
-                logits[ctx->config.eos_token]);
-        for (int i = 0; i < 5; i++) {
-            const char *tok = ctx->tokenizer.vocab[top_idx[i]];
-            fprintf(stderr, "  [%d] %.3f '%s'\n", top_idx[i], top_val[i],
-                    tok ? tok : "(null)");
-        }
-        g_debug_sample_count++;
-    }
 
     /* Apply temperature */
     if (sampler->temperature > 0 && sampler->temperature != 1.0f) {
@@ -1811,17 +1656,11 @@ int llm_chat(llm_ctx_t *ctx,
     memcpy(ctx->tokens, prompt_tokens, n_prompt * sizeof(int));
     ctx->n_tokens = n_prompt;
 
-    printf("[Chat] Prefill %d tokens (template=%d)...\n", n_prompt, (int)template_type);
-    fflush(stdout);
-
     /* Process prompt (prefill) */
     if (llm_forward_auto(ctx, prompt_tokens, n_prompt) != 0) {
         fprintf(stderr, "LLM: Forward pass failed on prompt\n");
         return -1;
     }
-
-    printf("[Chat] Generating up to %d tokens...\n", max_new_tokens);
-    fflush(stdout);
 
     /* Generate new tokens */
     int n_generated = 0;
@@ -1830,15 +1669,8 @@ int llm_chat(llm_ctx_t *ctx,
         /* Sample next token */
         int token = llm_sample(ctx, sampler);
 
-        if (i < 5) {
-            printf("[Chat] Sampled token %d = %d\n", i, token);
-            fflush(stdout);
-        }
-
         /* Check for EOS or end-of-turn markers */
         if (is_eot_token(ctx, token)) {
-            printf("[Chat] Got EOT token %d\n", token);
-            fflush(stdout);
             break;
         }
 
