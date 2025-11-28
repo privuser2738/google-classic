@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 276 110" width="276" height="110">
+  <!-- Classic Google Logo Recreation -->
+  <!-- G - Blue -->
+  <text x="8" y="85" font-family="Catull, Georgia, Times New Roman, serif" font-size="92" font-weight="bold" fill="#3369e8">G</text>
+  <!-- o - Red -->
+  <text x="68" y="85" font-family="Catull, Georgia, Times New Roman, serif" font-size="92" font-weight="bold" fill="#d50f25">o</text>
+  <!-- o - Yellow -->
+  <text x="118" y="85" font-family="Catull, Georgia, Times New Roman, serif" font-size="92" font-weight="bold" fill="#eeb211">o</text>
+  <!-- g - Blue -->
+  <text x="168" y="85" font-family="Catull, Georgia, Times New Roman, serif" font-size="92" font-weight="bold" fill="#3369e8">g</text>
+  <!-- l - Green -->
+  <text x="213" y="85" font-family="Catull, Georgia, Times New Roman, serif" font-size="92" font-weight="bold" fill="#009925">l</text>
+  <!-- e - Red -->
+  <text x="235" y="85" font-family="Catull, Georgia, Times New Roman, serif" font-size="92" font-weight="bold" fill="#d50f25">e</text>
+</svg>

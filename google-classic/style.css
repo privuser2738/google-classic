@@ -1,0 +1,255 @@
+/* Google Classic Stylesheet - Early 2000s Style */
+/* No responsive design, fixed widths, classic web design */
+
+body {
+    font-family: arial, sans-serif;
+    font-size: small;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+}
+
+/* Links */
+a:link {
+    color: #0000cc;
+    text-decoration: underline;
+}
+
+a:visited {
+    color: #551a8b;
+    text-decoration: underline;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+a:active {
+    color: #ff0000;
+}
+
+/* Form elements */
+input[type="text"] {
+    font-size: 14px;
+    padding: 2px;
+    border: 1px solid #b5b5b5;
+}
+
+input[type="submit"] {
+    font-size: 12px;
+    padding: 3px 8px;
+    background-color: #efefef;
+    border: 1px solid #999999;
+    cursor: pointer;
+}
+
+input[type="submit"]:hover {
+    border-color: #333333;
+}
+
+/* Tables */
+table {
+    font-size: small;
+}
+
+td {
+    font-size: small;
+}
+
+/* Font sizes */
+.small {
+    font-size: 11px;
+}
+
+.smaller {
+    font-size: 10px;
+}
+
+/* Search results page specific styles */
+.results-header {
+    background-color: #3366cc;
+    padding: 4px 8px;
+}
+
+.results-header a {
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.results-header a:hover {
+    text-decoration: underline;
+}
+
+.result-item {
+    margin-bottom: 20px;
+    padding-left: 0;
+}
+
+.result-title {
+    font-size: 14px;
+}
+
+.result-title a {
+    color: #0000cc;
+    text-decoration: underline;
+}
+
+.result-title a:visited {
+    color: #551a8b;
+}
+
+.result-url {
+    color: #008000;
+    font-size: 12px;
+}
+
+.result-snippet {
+    font-size: 12px;
+    color: #000000;
+    line-height: 1.4;
+}
+
+.result-cached {
+    font-size: 11px;
+    color: #666666;
+}
+
+.result-cached a {
+    color: #0000cc;
+}
+
+/* Stats bar */
+.stats-bar {
+    font-size: 11px;
+    color: #666666;
+    padding: 8px 0;
+    border-bottom: 1px solid #3366cc;
+    margin-bottom: 15px;
+}
+
+/* Navigation bar colors */
+.nav-blue {
+    background-color: #3366cc;
+}
+
+.nav-td {
+    padding: 4px 10px;
+}
+
+/* Sponsored links */
+.sponsored {
+    background-color: #ffffcc;
+    border: 1px solid #cccccc;
+    padding: 8px;
+    margin-bottom: 15px;
+}
+
+.sponsored-title {
+    font-size: 11px;
+    color: #666666;
+    margin-bottom: 5px;
+}
+
+/* Footer */
+.footer {
+    border-top: 1px solid #3366cc;
+    padding-top: 10px;
+    margin-top: 20px;
+}
+
+/* Page numbers */
+.page-numbers {
+    font-size: 14px;
+}
+
+.page-numbers a {
+    color: #0000cc;
+    text-decoration: none;
+    padding: 0 5px;
+}
+
+.page-numbers a:hover {
+    text-decoration: underline;
+}
+
+.page-numbers .current {
+    color: #ff0000;
+    font-weight: bold;
+}
+
+/* Blue bar at top of results */
+.blue-bar {
+    background-color: #3366cc;
+    height: 1px;
+    width: 100%;
+}
+
+/* Advanced search page */
+.adv-table {
+    border: 1px solid #cbdced;
+    background-color: #e5ecf9;
+}
+
+.adv-table td {
+    padding: 4px 8px;
+}
+
+.adv-header {
+    background-color: #3366cc;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 4px 8px;
+}
+
+/* Classic gray background for some elements */
+.gray-bg {
+    background-color: #f0f0f0;
+}
+
+/* Directory categories */
+.directory {
+    font-size: 12px;
+}
+
+.directory a {
+    color: #0000cc;
+}
+
+/* Tab styling for navigation */
+.tab-selected {
+    background-color: #ffffff;
+    border: 1px solid #3366cc;
+    border-bottom: none;
+    padding: 3px 8px;
+    font-weight: bold;
+}
+
+.tab-unselected {
+    background-color: #deeaf6;
+    border: 1px solid #3366cc;
+    border-bottom: none;
+    padding: 3px 8px;
+}
+
+/* Horizontal rule classic style */
+hr {
+    height: 1px;
+    border: 0;
+    background-color: #3366cc;
+    color: #3366cc;
+}
+
+/* Classic button look */
+.classic-btn {
+    background-color: #f0f0f0;
+    border: 2px outset #d4d4d4;
+    padding: 2px 8px;
+    font-family: arial, sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.classic-btn:active {
+    border: 2px inset #d4d4d4;
+}

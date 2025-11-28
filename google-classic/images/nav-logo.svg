@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 30" width="100" height="30">
+  <!-- Navigation Logo - Classic Google "Goooooogle" pagination style -->
+  <text x="2" y="24" font-family="Catull, Georgia, Times New Roman, serif" font-size="28" font-weight="bold" fill="#3369e8">G</text>
+  <text x="20" y="24" font-family="Catull, Georgia, Times New Roman, serif" font-size="28" font-weight="bold" fill="#d50f25">o</text>
+  <text x="36" y="24" font-family="Catull, Georgia, Times New Roman, serif" font-size="28" font-weight="bold" fill="#eeb211">o</text>
+  <text x="52" y="24" font-family="Catull, Georgia, Times New Roman, serif" font-size="28" font-weight="bold" fill="#3369e8">g</text>
+  <text x="68" y="24" font-family="Catull, Georgia, Times New Roman, serif" font-size="28" font-weight="bold" fill="#009925">l</text>
+  <text x="78" y="24" font-family="Catull, Georgia, Times New Roman, serif" font-size="28" font-weight="bold" fill="#d50f25">e</text>
+</svg>
