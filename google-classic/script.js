@@ -9,127 +9,258 @@ window.onload = function() {
     }
 };
 
-// Handle "I'm Feeling Lucky" - redirects to first result
-function feelingLucky(query) {
-    // In classic Google, this would redirect to the first search result
-    // For this simulation, we'll just go to search results
-    return true;
+// Simple seeded random number generator for consistent results per query/page
+function seededRandom(seed) {
+    var x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
 }
 
-// Store search history in a simple way (no localStorage in early 2000s, using cookies simulation)
-function addToHistory(query) {
-    // Simplified - early Google didn't really do this client-side
-    var history = getSearchHistory();
-    if (history.indexOf(query) === -1) {
-        history.unshift(query);
-        if (history.length > 10) {
-            history.pop();
-        }
+// Hash a string to a number for seeding
+function hashString(str) {
+    var hash = 0;
+    for (var i = 0; i < str.length; i++) {
+        var char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
     }
+    return Math.abs(hash);
 }
 
-function getSearchHistory() {
-    // Simple in-memory storage for demo
-    if (!window.searchHistory) {
-        window.searchHistory = [];
-    }
-    return window.searchHistory;
-}
+// Early 2000s website templates - these were the big sites back then
+var siteTemplates = [
+    // Major portals and directories
+    { domain: 'www.yahoo.com', name: 'Yahoo!', type: 'directory' },
+    { domain: 'www.dmoz.org', name: 'DMOZ Open Directory', type: 'directory' },
+    { domain: 'dir.yahoo.com', name: 'Yahoo! Directory', type: 'directory' },
+    { domain: 'www.looksmart.com', name: 'LookSmart', type: 'directory' },
 
-// Simple form validation
-function validateSearch(form) {
-    var query = form.q.value;
-    if (query.trim() === '') {
-        return false;
-    }
-    return true;
-}
+    // Reference sites
+    { domain: 'www.wikipedia.org', name: 'Wikipedia', type: 'encyclopedia' },
+    { domain: 'www.britannica.com', name: 'Encyclopædia Britannica', type: 'encyclopedia' },
+    { domain: 'www.howstuffworks.com', name: 'HowStuffWorks', type: 'reference' },
+    { domain: 'www.about.com', name: 'About.com', type: 'reference' },
+    { domain: 'www.answers.com', name: 'Answers.com', type: 'reference' },
+    { domain: 'www.infoplease.com', name: 'Infoplease', type: 'reference' },
 
-// Handle radio button changes for search type
-function setSearchType(type) {
-    var radios = document.getElementsByName('meta');
-    for (var i = 0; i < radios.length; i++) {
-        if (radios[i].value === type) {
-            radios[i].checked = true;
-            break;
-        }
-    }
-}
+    // Shopping
+    { domain: 'www.amazon.com', name: 'Amazon.com', type: 'shopping' },
+    { domain: 'www.ebay.com', name: 'eBay', type: 'auction' },
+    { domain: 'www.buy.com', name: 'Buy.com', type: 'shopping' },
+    { domain: 'www.shopping.com', name: 'Shopping.com', type: 'shopping' },
+    { domain: 'www.pricegrabber.com', name: 'PriceGrabber', type: 'shopping' },
+    { domain: 'www.bizrate.com', name: 'BizRate', type: 'shopping' },
 
-// Classic Google easter egg - searching for "google" shows special message
-function checkEasterEggs(query) {
-    var lowerQuery = query.toLowerCase();
-    if (lowerQuery === 'google') {
-        // In early Google, searching for "google" was common
-        return true;
-    }
-    if (lowerQuery === 'elgoog') {
-        // Mirror google easter egg
-        return true;
-    }
-    return false;
-}
+    // Tech sites
+    { domain: 'www.cnet.com', name: 'CNET', type: 'tech' },
+    { domain: 'www.zdnet.com', name: 'ZDNet', type: 'tech' },
+    { domain: 'www.pcworld.com', name: 'PC World', type: 'tech' },
+    { domain: 'www.pcmag.com', name: 'PC Magazine', type: 'tech' },
+    { domain: 'www.wired.com', name: 'Wired News', type: 'tech' },
+    { domain: 'slashdot.org', name: 'Slashdot', type: 'tech' },
+    { domain: 'www.tomshardware.com', name: "Tom's Hardware", type: 'tech' },
+    { domain: 'www.anandtech.com', name: 'AnandTech', type: 'tech' },
+    { domain: 'www.techrepublic.com', name: 'TechRepublic', type: 'tech' },
 
-// Generate mock search results for demonstration
-function generateMockResults(query) {
-    // This simulates what search results looked like in early 2000s
+    // News
+    { domain: 'www.cnn.com', name: 'CNN.com', type: 'news' },
+    { domain: 'www.msnbc.com', name: 'MSNBC', type: 'news' },
+    { domain: 'news.bbc.co.uk', name: 'BBC News', type: 'news' },
+    { domain: 'www.nytimes.com', name: 'The New York Times', type: 'news' },
+    { domain: 'www.washingtonpost.com', name: 'Washington Post', type: 'news' },
+    { domain: 'www.usatoday.com', name: 'USA Today', type: 'news' },
+
+    // Forums and communities
+    { domain: 'www.geocities.com', name: 'GeoCities', type: 'personal' },
+    { domain: 'www.angelfire.com', name: 'Angelfire', type: 'personal' },
+    { domain: 'www.tripod.com', name: 'Tripod', type: 'personal' },
+    { domain: 'members.aol.com', name: 'AOL Members', type: 'personal' },
+    { domain: 'www.xanga.com', name: 'Xanga', type: 'blog' },
+    { domain: 'www.livejournal.com', name: 'LiveJournal', type: 'blog' },
+    { domain: 'www.blogger.com', name: 'Blogger', type: 'blog' },
+
+    // Educational
+    { domain: 'www.edu', name: 'University Website', type: 'edu' },
+    { domain: 'www.mit.edu', name: 'MIT', type: 'edu' },
+    { domain: 'www.stanford.edu', name: 'Stanford University', type: 'edu' },
+    { domain: 'www.berkeley.edu', name: 'UC Berkeley', type: 'edu' },
+
+    // Software/Downloads
+    { domain: 'www.download.com', name: 'Download.com', type: 'downloads' },
+    { domain: 'www.tucows.com', name: 'Tucows', type: 'downloads' },
+    { domain: 'www.sourceforge.net', name: 'SourceForge', type: 'downloads' },
+    { domain: 'www.versiontracker.com', name: 'VersionTracker', type: 'downloads' },
+
+    // Entertainment
+    { domain: 'www.imdb.com', name: 'IMDb', type: 'entertainment' },
+    { domain: 'www.rottentomatoes.com', name: 'Rotten Tomatoes', type: 'entertainment' },
+    { domain: 'www.allmusic.com', name: 'All Music Guide', type: 'entertainment' },
+    { domain: 'www.ign.com', name: 'IGN', type: 'gaming' },
+    { domain: 'www.gamespot.com', name: 'GameSpot', type: 'gaming' },
+    { domain: 'www.gamefaqs.com', name: 'GameFAQs', type: 'gaming' },
+
+    // Health
+    { domain: 'www.webmd.com', name: 'WebMD', type: 'health' },
+    { domain: 'www.mayoclinic.com', name: 'Mayo Clinic', type: 'health' },
+    { domain: 'www.healthcentral.com', name: 'HealthCentral', type: 'health' },
+
+    // Travel
+    { domain: 'www.expedia.com', name: 'Expedia', type: 'travel' },
+    { domain: 'www.travelocity.com', name: 'Travelocity', type: 'travel' },
+    { domain: 'www.orbitz.com', name: 'Orbitz', type: 'travel' },
+    { domain: 'www.lonelyplanet.com', name: 'Lonely Planet', type: 'travel' },
+
+    // Finance
+    { domain: 'finance.yahoo.com', name: 'Yahoo! Finance', type: 'finance' },
+    { domain: 'www.fool.com', name: 'The Motley Fool', type: 'finance' },
+    { domain: 'www.marketwatch.com', name: 'MarketWatch', type: 'finance' }
+];
+
+// Snippet templates based on site type
+var snippetTemplates = {
+    directory: [
+        'Browse our directory listing for {query}. Find websites organized by category.',
+        'Directory results for {query}. Explore hand-picked websites and resources.',
+        '{query} - Directory listing with subcategories and related sites.'
+    ],
+    encyclopedia: [
+        '{query} - From the encyclopedia. {query} refers to a subject of significant interest...',
+        'Encyclopedia article on {query}. Learn about the history, significance, and details.',
+        '{query}. This article covers the main aspects and provides comprehensive information...'
+    ],
+    reference: [
+        'Learn about {query}. Comprehensive guide with explanations and examples.',
+        '{query} explained - Find out everything you need to know about this topic.',
+        'Reference guide for {query}. Detailed information and expert resources.'
+    ],
+    shopping: [
+        'Shop for {query}. Compare prices from top retailers. Free shipping available.',
+        'Find great deals on {query}. Save money with our price comparison.',
+        '{query} - Shop now and save. Thousands of products available.'
+    ],
+    auction: [
+        'Buy {query} on auction. Bid now - auctions ending soon!',
+        '{query} for sale. Find new and used items. Place your bid today.',
+        'Auction listings for {query}. Great deals from sellers worldwide.'
+    ],
+    tech: [
+        '{query} reviews, news, and downloads. Expert technology coverage.',
+        'Technology news: {query}. Read reviews and get buying advice.',
+        '{query} - Tech reviews, specs, and comparisons from industry experts.'
+    ],
+    news: [
+        'Latest news on {query}. Breaking stories and in-depth coverage.',
+        '{query} - News, analysis, and opinion from around the world.',
+        'Read the latest {query} news and updates from trusted journalists.'
+    ],
+    personal: [
+        '{query} - Personal homepage. Fan site with information and pictures.',
+        'My {query} Page - Welcome to my site about {query}!',
+        '{query} fansite. Created by a fan, for fans. Last updated 2003.'
+    ],
+    blog: [
+        '{query} - Blog posts and personal thoughts on this topic.',
+        'Blogging about {query}. Read my latest entries and leave a comment.',
+        '{query} blog. Daily updates and musings from a dedicated writer.'
+    ],
+    edu: [
+        '{query} - Academic resources and research from university archives.',
+        'University course materials on {query}. Educational resources.',
+        'Academic paper: {query}. Research and scholarly articles available.'
+    ],
+    downloads: [
+        'Download {query} software. Free and shareware programs available.',
+        '{query} - Free download. Latest version with reviews and screenshots.',
+        'Software downloads for {query}. Freeware, shareware, and demos.'
+    ],
+    entertainment: [
+        '{query} - Entertainment database with ratings and reviews.',
+        'Find information about {query}. Cast, crew, reviews, and more.',
+        '{query} guide. Comprehensive entertainment database and community.'
+    ],
+    gaming: [
+        '{query} - Game reviews, cheats, codes, and walkthroughs.',
+        'Gaming guide for {query}. FAQs, hints, and strategy guides.',
+        '{query} cheats and codes. Complete game guide with tips.'
+    ],
+    health: [
+        '{query} - Health information and medical resources.',
+        'Medical information about {query}. Symptoms, treatments, and advice.',
+        '{query} health guide. Expert medical information you can trust.'
+    ],
+    travel: [
+        '{query} travel guide. Hotels, flights, and vacation packages.',
+        'Plan your trip: {query}. Find deals on hotels and airfare.',
+        '{query} - Travel information, reviews, and booking services.'
+    ],
+    finance: [
+        '{query} - Financial news, stock quotes, and market analysis.',
+        'Investing in {query}. Market data and financial research.',
+        '{query} financial information. Quotes, charts, and expert analysis.'
+    ]
+};
+
+// Generate varied results based on query and page number
+function generateMockResults(query, pageNum) {
+    if (!pageNum) pageNum = 1;
+
     var results = [];
+    var seed = hashString(query + pageNum);
+    var numResults = 10;
 
-    // Common early 2000s websites that would appear in results
-    var mockSites = [
-        {
-            title: query + ' - Wikipedia, the free encyclopedia',
-            url: 'http://www.wikipedia.org/wiki/' + encodeURIComponent(query),
-            snippet: 'From Wikipedia, the free encyclopedia. ' + query + ' is a topic that has been documented extensively...'
-        },
-        {
-            title: query + ' Information and Resources',
-            url: 'http://www.about.com/' + encodeURIComponent(query),
-            snippet: 'Learn more about ' + query + '. Find articles, guides, and expert advice on this topic.'
-        },
-        {
-            title: 'Yahoo! Directory - ' + query,
-            url: 'http://dir.yahoo.com/search?p=' + encodeURIComponent(query),
-            snippet: 'Yahoo! Directory listing for ' + query + '. Browse categories and find related websites.'
-        },
-        {
-            title: query + ' at Amazon.com',
-            url: 'http://www.amazon.com/s?keywords=' + encodeURIComponent(query),
-            snippet: 'Shop for ' + query + ' at Amazon.com. Free shipping on orders over $25.'
-        },
-        {
-            title: query + ' - Encyclopædia Britannica',
-            url: 'http://www.britannica.com/search?query=' + encodeURIComponent(query),
-            snippet: 'Encyclopædia Britannica article on ' + query + '. Authoritative reference content.'
-        },
-        {
-            title: 'CNET.com - ' + query + ' Reviews',
-            url: 'http://www.cnet.com/search/?query=' + encodeURIComponent(query),
-            snippet: 'Read reviews and get the latest news about ' + query + ' from CNET, the technology experts.'
-        },
-        {
-            title: query + ' - HowStuffWorks',
-            url: 'http://www.howstuffworks.com/search.php?terms=' + encodeURIComponent(query),
-            snippet: 'Learn how ' + query + ' works. In-depth explanations and diagrams to help you understand.'
-        },
-        {
-            title: query + ' Forums - pair Networks',
-            url: 'http://forums.pair.com/search/' + encodeURIComponent(query),
-            snippet: 'Discussion forums about ' + query + '. Join the community and share your knowledge.'
-        },
-        {
-            title: query + ' - GeoCities',
-            url: 'http://www.geocities.com/search?q=' + encodeURIComponent(query),
-            snippet: 'GeoCities member pages about ' + query + '. Personal homepages and fan sites.'
-        },
-        {
-            title: query + ' at eBay',
-            url: 'http://search.ebay.com/' + encodeURIComponent(query),
-            snippet: 'Find great deals on ' + query + ' at eBay. Auctions ending soon!'
-        }
-    ];
+    // Shuffle the site templates based on seed
+    var shuffledSites = siteTemplates.slice();
+    for (var i = shuffledSites.length - 1; i > 0; i--) {
+        var j = Math.floor(seededRandom(seed + i) * (i + 1));
+        var temp = shuffledSites[i];
+        shuffledSites[i] = shuffledSites[j];
+        shuffledSites[j] = temp;
+    }
 
-    return mockSites;
+    // Start index based on page (so we get different sites per page)
+    var startIdx = ((pageNum - 1) * 10) % shuffledSites.length;
+
+    for (var i = 0; i < numResults; i++) {
+        var siteIdx = (startIdx + i) % shuffledSites.length;
+        var site = shuffledSites[siteIdx];
+        var snippets = snippetTemplates[site.type] || snippetTemplates.reference;
+        var snippetIdx = Math.floor(seededRandom(seed + i + 100) * snippets.length);
+        var snippet = snippets[snippetIdx].replace(/\{query\}/g, query);
+
+        // Generate URL path
+        var urlPaths = [
+            '/search?q=' + encodeURIComponent(query),
+            '/' + encodeURIComponent(query.toLowerCase().replace(/\s+/g, '_')),
+            '/articles/' + encodeURIComponent(query.toLowerCase().replace(/\s+/g, '-')),
+            '/wiki/' + encodeURIComponent(query.replace(/\s+/g, '_')),
+            '/topic/' + encodeURIComponent(query.toLowerCase().replace(/\s+/g, '+')),
+            '/info/' + encodeURIComponent(query.toLowerCase()),
+            '/guide/' + encodeURIComponent(query.toLowerCase().replace(/\s+/g, '_'))
+        ];
+        var pathIdx = Math.floor(seededRandom(seed + i + 200) * urlPaths.length);
+
+        // Generate title variations
+        var titles = [
+            query + ' - ' + site.name,
+            site.name + ': ' + query,
+            query + ' | ' + site.name,
+            query + ' Information - ' + site.name,
+            site.name + ' - ' + query + ' Guide',
+            'Learn About ' + query + ' - ' + site.name,
+            query + ' Resources at ' + site.name
+        ];
+        var titleIdx = Math.floor(seededRandom(seed + i + 300) * titles.length);
+
+        results.push({
+            title: titles[titleIdx],
+            url: 'http://' + site.domain + urlPaths[pathIdx],
+            snippet: snippet,
+            size: Math.floor(seededRandom(seed + i + 400) * 80 + 5) + 'k',
+            cached: Math.floor(seededRandom(seed + i + 500) * 30 + 1) + ' ' +
+                   (seededRandom(seed + i + 600) > 0.5 ? 'Dec' : 'Nov') + ' 2003'
+        });
+    }
+
+    return results;
 }
 
 // Format number with commas (classic style)
@@ -142,5 +273,11 @@ function getSearchTime() {
     return (Math.random() * 0.5 + 0.1).toFixed(2);
 }
 
-// Classic Google did not have instant search - this mimics that behavior
-// No autocomplete, no suggestions while typing
+// Simple form validation
+function validateSearch(form) {
+    var query = form.q.value;
+    if (query.trim() === '') {
+        return false;
+    }
+    return true;
+}
