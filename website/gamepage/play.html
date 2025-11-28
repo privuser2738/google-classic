@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Play Game - Persian Arcade</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/player.css">
+    <script src="https://js-dos.com/v7/build/js-dos.js"></script>
+    <link rel="stylesheet" href="https://js-dos.com/v7/build/js-dos.css">
+</head>
+<body class="player-page">
+    <header class="site-header">
+        <div class="header-content">
+            <a href="index.html" class="logo">
+                <span class="logo-icon">🏛️</span>
+                <span class="logo-text">Persian Arcade</span>
+            </a>
+            <nav class="main-nav">
+                <a href="index.html" class="nav-link">Browse</a>
+                <a href="#" class="nav-link" id="random-btn">Random Game</a>
+                <a href="settings.html" class="nav-link">Controller Setup</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="player-content">
+        <div class="game-info-bar">
+            <h1 id="game-title">Loading...</h1>
+            <div class="game-controls">
+                <button id="fullscreen-btn" class="control-btn" title="Fullscreen">⛶</button>
+                <button id="settings-btn" class="control-btn" title="Game Settings">⚙</button>
+            </div>
+        </div>
+
+        <div class="player-container">
+            <div class="game-wrapper" id="game-wrapper">
+                <div id="dos-container"></div>
+                <div class="resize-handle" id="resize-handle"></div>
+            </div>
+        </div>
+
+        <div class="game-details">
+            <div class="detail-section">
+                <h3>Description</h3>
+                <p id="game-description">Loading game information...</p>
+            </div>
+            <div class="detail-section">
+                <h3>Genres</h3>
+                <div id="game-genres" class="genre-tags"></div>
+            </div>
+            <div class="detail-section">
+                <h3>Controls</h3>
+                <div id="game-controls-info" class="controls-info">
+                    <p>Use keyboard for game controls. Check Controller Setup for gamepad mapping.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Game Settings</h2>
+                <button class="modal-close" id="close-settings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>Window Size</label>
+                    <div class="size-presets">
+                        <button class="size-btn" data-width="640" data-height="480">640x480</button>
+                        <button class="size-btn" data-width="800" data-height="600">800x600</button>
+                        <button class="size-btn" data-width="1024" data-height="768">1024x768</button>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label for="scale-slider">Scale: <span id="scale-value">100%</span></label>
+                    <input type="range" id="scale-slider" min="50" max="200" value="100">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/games-data.js"></script>
+    <script src="js/player.js"></script>
+</body>
+</html>

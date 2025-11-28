@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Persian Arcade - Classic PC Games</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-content">
+            <a href="index.html" class="logo">
+                <span class="logo-icon">🏛️</span>
+                <span class="logo-text">Persian Arcade</span>
+            </a>
+            <nav class="main-nav">
+                <a href="index.html" class="nav-link active">Browse</a>
+                <a href="#" class="nav-link" id="random-btn">Random Game</a>
+                <a href="settings.html" class="nav-link">Controller Setup</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <section class="hero">
+            <h1>Play Classic PC Games</h1>
+            <p>Journey through time to the golden age of gaming</p>
+        </section>
+
+        <section class="filters">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Search games...">
+            </div>
+            <div class="genre-filters" id="genre-filters">
+                <button class="genre-btn active" data-genre="all">All</button>
+                <!-- Genre buttons populated by JS -->
+            </div>
+        </section>
+
+        <section class="games-grid" id="games-grid">
+            <!-- Games populated by JS -->
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>Games preserved from the Internet Archive. For preservation and educational purposes.</p>
+        <p style="margin-top: 0.5rem; font-size: 0.8rem;">Like the ancient libraries of Persia, we preserve knowledge for generations.</p>
+    </footer>
+
+    <script src="js/games-data.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

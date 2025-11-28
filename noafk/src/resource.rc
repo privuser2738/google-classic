@@ -1,0 +1,53 @@
+/* NoAFK - Resource Script */
+
+#include "resource.h"
+
+/* Icons */
+IDI_APPICON ICON "icons/noafk.ico"
+IDI_PAUSED ICON "icons/noafk_paused.ico"
+
+/* Settings Dialog - using numeric values instead of constants */
+/* DS_SETFONT=0x40, DS_MODALFRAME=0x80, DS_FIXEDSYS=0x08, DS_CENTER=0x0800 */
+/* WS_POPUP=0x80000000, WS_CAPTION=0x00C00000, WS_SYSMENU=0x00080000 */
+IDD_SETTINGS DIALOGEX 0, 0, 280, 230
+STYLE 0x80CC08C8
+EXSTYLE 0
+CAPTION "NoAFK Settings"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    /* Timing Group - GROUPBOX BS_GROUPBOX=0x07 */
+    CONTROL "Timing", IDC_GROUP_TIMING, "Button", 0x50000007, 7, 7, 266, 55
+
+    /* LTEXT - SS_LEFT=0 */
+    CONTROL "Min interval (seconds):", IDC_LABEL_MIN, "Static", 0x50000000, 15, 22, 80, 10
+    /* EDITTEXT - ES_AUTOHSCROLL=0x80, ES_NUMBER=0x2000 */
+    CONTROL "", IDC_MIN_INTERVAL, "Edit", 0x50012080, 100, 20, 40, 14
+
+    CONTROL "Max interval (seconds):", IDC_LABEL_MAX, "Static", 0x50000000, 15, 40, 80, 10
+    CONTROL "", IDC_MAX_INTERVAL, "Edit", 0x50012080, 100, 38, 40, 14
+
+    CONTROL "(Random delay between actions)", -1, "Static", 0x50000000, 150, 30, 115, 10
+
+    /* Input Method Group */
+    CONTROL "Input Method", IDC_GROUP_INPUT, "Button", 0x50000007, 7, 67, 266, 50
+    CONTROL "Type:", IDC_LABEL_TYPE, "Static", 0x50000000, 15, 85, 25, 10
+    /* COMBOBOX - CBS_DROPDOWNLIST=0x03, WS_VSCROLL=0x00200000, WS_TABSTOP=0x00010000 */
+    CONTROL "", IDC_INPUT_TYPE, "ComboBox", 0x50210003, 45, 83, 150, 100
+
+    /* Behavior Group */
+    CONTROL "Behavior", IDC_GROUP_BEHAVIOR, "Button", 0x50000007, 7, 122, 266, 70
+    /* AUTOCHECKBOX - BS_AUTOCHECKBOX=0x03 */
+    CONTROL "Only send inputs when WoW is focused", IDC_ONLY_FOCUSED, "Button", 0x50010003, 15, 137, 200, 10
+    CONTROL "Start minimized to system tray", IDC_START_MINIMIZED, "Button", 0x50010003, 15, 152, 200, 10
+    CONTROL "Process name:", IDC_LABEL_PROCESS, "Static", 0x50000000, 15, 170, 50, 10
+    CONTROL "", IDC_PROCESS_NAME, "Edit", 0x50010080, 70, 168, 80, 14
+    CONTROL "(e.g., Wow.exe)", -1, "Static", 0x50000000, 155, 170, 60, 10
+
+    /* Buttons - DEFPUSHBUTTON, PUSHBUTTON use BS_PUSHBUTTON=0x00, BS_DEFPUSHBUTTON=0x01 */
+    CONTROL "OK", 1, "Button", 0x50010001, 115, 202, 50, 14
+    CONTROL "Cancel", 2, "Button", 0x50010000, 170, 202, 50, 14
+    CONTROL "Reset", IDC_RESET, "Button", 0x50010000, 225, 202, 40, 14
+END
+
+/* Application Manifest - RT_MANIFEST = 24 */
+1 24 "NoAFK.manifest"

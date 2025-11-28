@@ -1,0 +1,542 @@
+/* Google Classic Stylesheet - Early 2000s Style */
+/* No responsive design, fixed widths, classic web design */
+
+body {
+    font-family: arial, sans-serif;
+    font-size: small;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+}
+
+/* Links */
+a:link {
+    color: #0000cc;
+    text-decoration: underline;
+}
+
+a:visited {
+    color: #551a8b;
+    text-decoration: underline;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+a:active {
+    color: #ff0000;
+}
+
+/* Form elements */
+input[type="text"] {
+    font-size: 14px;
+    padding: 2px;
+    border: 1px solid #b5b5b5;
+}
+
+input[type="submit"] {
+    font-size: 12px;
+    padding: 3px 8px;
+    background-color: #efefef;
+    border: 1px solid #999999;
+    cursor: pointer;
+}
+
+input[type="submit"]:hover {
+    border-color: #333333;
+}
+
+/* Tables */
+table {
+    font-size: small;
+}
+
+td {
+    font-size: small;
+}
+
+/* Font sizes */
+.small {
+    font-size: 11px;
+}
+
+.smaller {
+    font-size: 10px;
+}
+
+/* Search results page specific styles */
+.results-header {
+    background-color: #3366cc;
+    padding: 4px 8px;
+}
+
+.results-header a {
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.results-header a:hover {
+    text-decoration: underline;
+}
+
+.result-item {
+    margin-bottom: 20px;
+    padding-left: 0;
+}
+
+.result-title {
+    font-size: 14px;
+}
+
+.result-title a {
+    color: #0000cc;
+    text-decoration: underline;
+}
+
+.result-title a:visited {
+    color: #551a8b;
+}
+
+.result-url {
+    color: #008000;
+    font-size: 12px;
+}
+
+.result-snippet {
+    font-size: 12px;
+    color: #000000;
+    line-height: 1.4;
+}
+
+.result-cached {
+    font-size: 11px;
+    color: #666666;
+}
+
+.result-cached a {
+    color: #0000cc;
+}
+
+/* Stats bar */
+.stats-bar {
+    font-size: 11px;
+    color: #666666;
+    padding: 8px 0;
+    border-bottom: 1px solid #3366cc;
+    margin-bottom: 15px;
+}
+
+/* Navigation bar colors */
+.nav-blue {
+    background-color: #3366cc;
+}
+
+.nav-td {
+    padding: 4px 10px;
+}
+
+/* Sponsored links */
+.sponsored {
+    background-color: #ffffcc;
+    border: 1px solid #cccccc;
+    padding: 8px;
+    margin-bottom: 15px;
+}
+
+.sponsored-title {
+    font-size: 11px;
+    color: #666666;
+    margin-bottom: 5px;
+}
+
+/* Footer */
+.footer {
+    border-top: 1px solid #3366cc;
+    padding-top: 10px;
+    margin-top: 20px;
+}
+
+/* Page numbers */
+.page-numbers {
+    font-size: 14px;
+}
+
+.page-numbers a {
+    color: #0000cc;
+    text-decoration: none;
+    padding: 0 5px;
+}
+
+.page-numbers a:hover {
+    text-decoration: underline;
+}
+
+.page-numbers .current {
+    color: #ff0000;
+    font-weight: bold;
+}
+
+/* Blue bar at top of results */
+.blue-bar {
+    background-color: #3366cc;
+    height: 1px;
+    width: 100%;
+}
+
+/* Advanced search page */
+.adv-table {
+    border: 1px solid #cbdced;
+    background-color: #e5ecf9;
+}
+
+.adv-table td {
+    padding: 4px 8px;
+}
+
+.adv-header {
+    background-color: #3366cc;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 4px 8px;
+}
+
+/* Classic gray background for some elements */
+.gray-bg {
+    background-color: #f0f0f0;
+}
+
+/* Directory categories */
+.directory {
+    font-size: 12px;
+}
+
+.directory a {
+    color: #0000cc;
+}
+
+/* Tab styling for navigation */
+.tab-selected {
+    background-color: #ffffff;
+    border: 1px solid #3366cc;
+    border-bottom: none;
+    padding: 3px 8px;
+    font-weight: bold;
+}
+
+.tab-unselected {
+    background-color: #deeaf6;
+    border: 1px solid #3366cc;
+    border-bottom: none;
+    padding: 3px 8px;
+}
+
+/* Horizontal rule classic style */
+hr {
+    height: 1px;
+    border: 0;
+    background-color: #3366cc;
+    color: #3366cc;
+}
+
+/* Classic button look */
+.classic-btn {
+    background-color: #f0f0f0;
+    border: 2px outset #d4d4d4;
+    padding: 2px 8px;
+    font-family: arial, sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.classic-btn:active {
+    border: 2px inset #d4d4d4;
+}
+
+/* ================================================
+   CLASSIC EARLY 2000s WEB ELEMENTS
+   ================================================ */
+
+/* Navigation links (no underline until hover) */
+.nav-link {
+    color: #0000cc;
+    text-decoration: none;
+}
+
+.nav-link:hover {
+    text-decoration: underline;
+}
+
+/* Classic marquee-style scrolling text (2000s nostalgia) */
+.marquee-text {
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* Bevel/emboss effect for buttons (very 2000s) */
+input[type="button"] {
+    font-size: 12px;
+    padding: 3px 8px;
+    background-color: #efefef;
+    border: 1px solid #999999;
+    cursor: pointer;
+}
+
+input[type="button"]:hover {
+    border-color: #333333;
+}
+
+/* Classic dotted separator */
+.dotted-sep {
+    border-bottom: 1px dotted #999999;
+}
+
+/* "NEW!" badge styling */
+.new-badge {
+    color: #cc0000;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+/* "BETA" badge styling */
+.beta-badge {
+    color: #cc0000;
+    font-size: 10px;
+    font-weight: bold;
+    font-style: italic;
+}
+
+/* Hit counter styling (very 2000s!) */
+.hit-counter {
+    font-family: 'Courier New', monospace;
+    background-color: #000000;
+    color: #00ff00;
+    padding: 2px 6px;
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+/* Guestbook link styling */
+.guestbook-link {
+    color: #0000cc;
+    font-size: 11px;
+}
+
+/* Classic table borders (single pixel, gray) */
+.classic-table {
+    border: 1px solid #cccccc;
+    border-collapse: collapse;
+}
+
+.classic-table td {
+    border: 1px solid #cccccc;
+    padding: 4px 8px;
+}
+
+/* Classic "click here" button styling */
+.click-here-btn {
+    background-color: #ffffcc;
+    border: 2px outset #cccc99;
+    padding: 4px 12px;
+    font-weight: bold;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.click-here-btn:active {
+    border: 2px inset #cccc99;
+}
+
+/* Under construction styling */
+.under-construction {
+    color: #ff6600;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+/* Webring navigation */
+.webring {
+    border: 1px solid #999999;
+    background-color: #f5f5f5;
+    padding: 8px;
+    font-size: 11px;
+    text-align: center;
+}
+
+/* Classic "Welcome to my site" header */
+.welcome-header {
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+    color: #0066cc;
+    font-size: 18px;
+}
+
+/* Email link with icon placeholder */
+.email-link {
+    color: #0000cc;
+    font-size: 11px;
+}
+
+/* Site last updated text */
+.last-updated {
+    color: #666666;
+    font-size: 10px;
+    font-style: italic;
+}
+
+/* Classic scrollbar styling (IE-specific, but nostalgic) */
+/* These don't work in modern browsers but are period-accurate */
+body {
+    scrollbar-face-color: #e0e0e0;
+    scrollbar-track-color: #ffffff;
+    scrollbar-arrow-color: #666666;
+    scrollbar-shadow-color: #999999;
+}
+
+/* "Best viewed with" badge area */
+.best-viewed {
+    font-size: 10px;
+    color: #999999;
+}
+
+/* Animated GIF placeholder styling */
+.animated-icon {
+    vertical-align: middle;
+    margin: 0 4px;
+}
+
+/* Classic link button (88x31 pixel badge standard) */
+.link-button {
+    width: 88px;
+    height: 31px;
+    border: 1px solid #999999;
+}
+
+/* AOL Instant Messenger online indicator style */
+.aim-online {
+    color: #00cc00;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.aim-offline {
+    color: #cc0000;
+    font-size: 10px;
+}
+
+/* Frames-style border (for non-frame sites mimicking the look) */
+.frame-border {
+    border: 2px inset #c0c0c0;
+    padding: 8px;
+}
+
+/* Classic "Site of the Day" badge */
+.site-award {
+    border: 2px solid #ffd700;
+    background-color: #ffffd0;
+    padding: 4px;
+    font-size: 10px;
+    text-align: center;
+}
+
+/* Netscape-style horizontal rule */
+hr.fancy {
+    height: 2px;
+    background: linear-gradient(to right, #ffffff, #3366cc, #ffffff);
+    border: none;
+}
+
+/* Classic Windows 98/2000 style form select */
+select {
+    font-size: 12px;
+    padding: 1px;
+    border: 1px solid #7f9db9;
+    background-color: #ffffff;
+}
+
+/* Textarea styling */
+textarea {
+    font-family: arial, sans-serif;
+    font-size: 12px;
+    border: 1px solid #7f9db9;
+    padding: 4px;
+}
+
+/* Radio and checkbox - keep them default browser style (very 2000s) */
+input[type="radio"],
+input[type="checkbox"] {
+    margin: 2px 4px 2px 0;
+}
+
+/* Classic "powered by" text */
+.powered-by {
+    font-size: 10px;
+    color: #666666;
+}
+
+/* Blinking text (the most 2000s thing ever - disabled by default) */
+/* Uncomment for authentic experience:
+.blink {
+    animation: blinker 1s linear infinite;
+}
+@keyframes blinker {
+    50% { opacity: 0; }
+}
+*/
+
+/* Table with colored header row */
+.data-table {
+    border-collapse: collapse;
+    border: 1px solid #3366cc;
+}
+
+.data-table th {
+    background-color: #3366cc;
+    color: #ffffff;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.data-table td {
+    border: 1px solid #cccccc;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.data-table tr:nth-child(even) {
+    background-color: #f5f5f5;
+}
+
+/* Classic "Skip to content" link (accessibility, but 2000s style) */
+.skip-link {
+    position: absolute;
+    top: -100px;
+    font-size: 10px;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+/* Spacer GIF replacement (using CSS) */
+.spacer {
+    display: inline-block;
+}
+
+/* Print-friendly link */
+.print-link {
+    font-size: 10px;
+    color: #666666;
+}
+
+/* Classic tooltip styling */
+[title] {
+    cursor: help;
+}
+
+/* IE-style focus outline */
+a:focus,
+input:focus,
+button:focus {
+    outline: 1px dotted #000000;
+}

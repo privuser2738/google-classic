@@ -1,0 +1,274 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+<title>Google Image Search</title>
+<link rel="stylesheet" type="text/css" href="style.css">
+<script src="script.js"></script>
+</head>
+<body bgcolor="#ffffff" topmargin="0" marginheight="0">
+
+<!-- Top Navigation Bar -->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#3366cc">
+<tr>
+<td bgcolor="#3366cc">
+<table border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td nowrap bgcolor="#3366cc">
+<font size="-1">&nbsp;</font>
+<a href="index.html"><img src="images/logo-small.svg" alt="Google" width="100" height="40" border="0" align="absmiddle"></a>
+<font size="-1">&nbsp;</font>
+</td>
+<td bgcolor="#3366cc" nowrap>
+<font size="-1">
+<a href="index.html"><font color="#ffffff">Web</font></a>&nbsp;
+</font>
+</td>
+<td bgcolor="#3366cc" nowrap>
+<font color="#ffffff" size="-1">
+&nbsp;<b>Images</b>&nbsp;
+</font>
+</td>
+<td bgcolor="#3366cc" nowrap>
+<font size="-1">
+<a href="groups.html"><font color="#ffffff">Groups</font></a>&nbsp;
+</font>
+</td>
+<td bgcolor="#3366cc" nowrap>
+<font size="-1">
+<a href="news.html"><font color="#ffffff">News</font></a>&nbsp;
+</font>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+
+<!-- Search Bar -->
+<table width="100%" border="0" cellspacing="0" cellpadding="2" bgcolor="#cbdced">
+<tr>
+<td>
+<form name="gs" action="image-results.html" method="GET">
+<input type="text" name="q" id="searchbox" size="41" maxlength="2048" value="">
+<input type="submit" name="btnG" value="Search">
+&nbsp;
+<font size="-1">
+Size:
+<select name="imgsz">
+<option value="" selected>All sizes</option>
+<option value="small">Small</option>
+<option value="medium">Medium</option>
+<option value="large">Large</option>
+<option value="xlarge">Extra Large</option>
+</select>
+</font>
+</form>
+</td>
+</tr>
+</table>
+
+<!-- Stats Bar -->
+<div style="padding: 5px 8px; font-size: 11px; color: #666666;">
+Images&nbsp;&nbsp;&nbsp;&nbsp;
+<b id="stats-text">Results <b>1</b> - <b>20</b> of about <b>523,000</b> for <b id="query-display"></b>. (<b id="search-time">0.31</b> seconds)</b>
+</div>
+
+<hr size="1" color="#3366cc" noshade>
+
+<!-- Image Results Grid -->
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td style="padding: 15px;">
+
+<div id="image-results">
+<!-- Classic Google Images layout - thumbnails with info below -->
+<table border="0" cellspacing="10" cellpadding="0">
+<tr valign="top">
+<td align="center" width="150">
+<a href="#"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'%3E%3Crect fill='%23ddd' width='120' height='90'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='12' fill='%23666' text-anchor='middle' dy='.3em'%3EImage 1%3C/text%3E%3C/svg%3E" width="120" height="90" border="1" alt=""></a><br>
+<font size="-2">
+<a href="#">Image Title</a><br>
+150 x 100 - 12k - jpg<br>
+<font color="#008000">www.example1.com</font>
+</font>
+</td>
+<td align="center" width="150">
+<a href="#"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'%3E%3Crect fill='%23ddd' width='120' height='90'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='12' fill='%23666' text-anchor='middle' dy='.3em'%3EImage 2%3C/text%3E%3C/svg%3E" width="120" height="90" border="1" alt=""></a><br>
+<font size="-2">
+<a href="#">Another Image</a><br>
+200 x 150 - 18k - jpg<br>
+<font color="#008000">www.example2.com</font>
+</font>
+</td>
+<td align="center" width="150">
+<a href="#"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'%3E%3Crect fill='%23ddd' width='120' height='90'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='12' fill='%23666' text-anchor='middle' dy='.3em'%3EImage 3%3C/text%3E%3C/svg%3E" width="120" height="90" border="1" alt=""></a><br>
+<font size="-2">
+<a href="#">Photo Result</a><br>
+300 x 200 - 25k - gif<br>
+<font color="#008000">www.example3.com</font>
+</font>
+</td>
+<td align="center" width="150">
+<a href="#"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'%3E%3Crect fill='%23ddd' width='120' height='90'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='12' fill='%23666' text-anchor='middle' dy='.3em'%3EImage 4%3C/text%3E%3C/svg%3E" width="120" height="90" border="1" alt=""></a><br>
+<font size="-2">
+<a href="#">Picture</a><br>
+250 x 175 - 20k - jpg<br>
+<font color="#008000">www.example4.com</font>
+</font>
+</td>
+<td align="center" width="150">
+<a href="#"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'%3E%3Crect fill='%23ddd' width='120' height='90'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='12' fill='%23666' text-anchor='middle' dy='.3em'%3EImage 5%3C/text%3E%3C/svg%3E" width="120" height="90" border="1" alt=""></a><br>
+<font size="-2">
+<a href="#">Sample Photo</a><br>
+180 x 120 - 15k - png<br>
+<font color="#008000">www.example5.com</font>
+</font>
+</td>
+</tr>
+<tr valign="top">
+<td align="center" width="150">
+<a href="#"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'%3E%3Crect fill='%23ddd' width='120' height='90'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='12' fill='%23666' text-anchor='middle' dy='.3em'%3EImage 6%3C/text%3E%3C/svg%3E" width="120" height="90" border="1" alt=""></a><br>
+<font size="-2">
+<a href="#">Photograph</a><br>
+400 x 300 - 35k - jpg<br>
+<font color="#008000">www.photos.com</font>
+</font>
+</td>
+<td align="center" width="150">
+<a href="#"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'%3E%3Crect fill='%23ddd' width='120' height='90'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='12' fill='%23666' text-anchor='middle' dy='.3em'%3EImage 7%3C/text%3E%3C/svg%3E" width="120" height="90" border="1" alt=""></a><br>
+<font size="-2">
+<a href="#">Graphic</a><br>
+500 x 400 - 45k - gif<br>
+<font color="#008000">www.graphics.net</font>
+</font>
+</td>
+<td align="center" width="150">
+<a href="#"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'%3E%3Crect fill='%23ddd' width='120' height='90'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='12' fill='%23666' text-anchor='middle' dy='.3em'%3EImage 8%3C/text%3E%3C/svg%3E" width="120" height="90" border="1" alt=""></a><br>
+<font size="-2">
+<a href="#">Wallpaper</a><br>
+1024 x 768 - 120k - jpg<br>
+<font color="#008000">www.wallpapers.com</font>
+</font>
+</td>
+<td align="center" width="150">
+<a href="#"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'%3E%3Crect fill='%23ddd' width='120' height='90'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='12' fill='%23666' text-anchor='middle' dy='.3em'%3EImage 9%3C/text%3E%3C/svg%3E" width="120" height="90" border="1" alt=""></a><br>
+<font size="-2">
+<a href="#">Digital Art</a><br>
+600 x 450 - 55k - png<br>
+<font color="#008000">www.art.org</font>
+</font>
+</td>
+<td align="center" width="150">
+<a href="#"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'%3E%3Crect fill='%23ddd' width='120' height='90'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='12' fill='%23666' text-anchor='middle' dy='.3em'%3EImage 10%3C/text%3E%3C/svg%3E" width="120" height="90" border="1" alt=""></a><br>
+<font size="-2">
+<a href="#">Clipart</a><br>
+100 x 100 - 8k - gif<br>
+<font color="#008000">www.clipart.com</font>
+</font>
+</td>
+</tr>
+</table>
+</div>
+
+<!-- Page Navigation -->
+<br>
+<center>
+<table border="0" cellpadding="0" cellspacing="0">
+<tr align="center" valign="top">
+<td nowrap>
+<img src="images/nav-logo.svg" alt="Google" width="100" height="30">
+</td>
+</tr>
+<tr align="center">
+<td class="page-numbers" id="pagination" style="padding-top: 10px;">
+<!-- Pagination generated by JavaScript -->
+</td>
+</tr>
+</table>
+</center>
+
+</td>
+</tr>
+</table>
+
+<!-- Footer -->
+<br>
+<center>
+<hr size="1" color="#3366cc" noshade width="95%">
+<font size="-2">
+<a href="images.html">Image Search Home</a> |
+<a href="advanced-image.html">Advanced Image Search</a> |
+<a href="preferences.html">Preferences</a> |
+<a href="image-help.html">Help</a>
+</font>
+<br><br>
+<font size="-2" color="#666666">
+&copy;2003 Google - Searching 425,000,000 images
+</font>
+</center>
+
+<script>
+// Parse query from URL
+(function() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var query = urlParams.get('q') || '';
+    var currentPage = parseInt(urlParams.get('start') || '0') / 20 + 1;
+    if (isNaN(currentPage) || currentPage < 1) currentPage = 1;
+
+    var searchBox = document.getElementById('searchbox');
+    if (searchBox && query) {
+        searchBox.value = query;
+    }
+
+    if (query) {
+        document.title = query + ' - Google Image Search';
+    }
+
+    var queryDisplay = document.getElementById('query-display');
+    if (queryDisplay && query) {
+        queryDisplay.textContent = '"' + query + '"';
+    }
+
+    // Update stats to show current page range
+    var statsText = document.getElementById('stats-text');
+    if (statsText && query) {
+        var startResult = (currentPage - 1) * 20 + 1;
+        var endResult = currentPage * 20;
+        statsText.innerHTML = 'Results <b>' + startResult + '</b> - <b>' + endResult + '</b> of about <b>523,000</b> for <b>"' + query + '"</b>. (<b>' + (Math.random() * 0.5 + 0.1).toFixed(2) + '</b> seconds)';
+    }
+
+    // Generate pagination
+    var pagination = document.getElementById('pagination');
+    if (pagination && query) {
+        var paginationHtml = '';
+
+        // Previous link
+        if (currentPage > 1) {
+            var prevStart = (currentPage - 2) * 20;
+            paginationHtml += '<a href="image-results.html?q=' + encodeURIComponent(query) + '&start=' + prevStart + '">Previous</a>&nbsp;&nbsp;&nbsp;';
+        }
+
+        // Page numbers
+        for (var p = 1; p <= 10; p++) {
+            var pageStart = (p - 1) * 20;
+            if (p === currentPage) {
+                paginationHtml += '<span class="current">' + p + '</span>\n';
+            } else {
+                paginationHtml += '<a href="image-results.html?q=' + encodeURIComponent(query) + '&start=' + pageStart + '">' + p + '</a>\n';
+            }
+        }
+
+        // Next link
+        if (currentPage < 10) {
+            var nextStart = currentPage * 20;
+            paginationHtml += '&nbsp;&nbsp;&nbsp;<a href="image-results.html?q=' + encodeURIComponent(query) + '&start=' + nextStart + '">Next</a>';
+        }
+
+        pagination.innerHTML = paginationHtml;
+    }
+})();
+</script>
+
+</body>
+</html>

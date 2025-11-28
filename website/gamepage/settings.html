@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controller Setup - Persian Arcade</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/settings.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-content">
+            <a href="index.html" class="logo">
+                <span class="logo-icon">🏛️</span>
+                <span class="logo-text">Persian Arcade</span>
+            </a>
+            <nav class="main-nav">
+                <a href="index.html" class="nav-link">Browse</a>
+                <a href="#" class="nav-link" id="random-btn">Random Game</a>
+                <a href="settings.html" class="nav-link active">Controller Setup</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="settings-content">
+        <h1>Controller Setup</h1>
+        <p class="settings-intro">Configure your gamepad for use with classic DOS games. Settings are saved locally.</p>
+
+        <section class="controller-status">
+            <h2>Controller Status</h2>
+            <div id="controller-info" class="controller-info">
+                <p class="no-controller">No controller detected. Connect a controller and press any button.</p>
+            </div>
+        </section>
+
+        <section class="controller-test">
+            <h2>Controller Test</h2>
+            <div class="gamepad-visual">
+                <div class="gamepad-display" id="gamepad-display">
+                    <div class="stick left-stick">
+                        <div class="stick-indicator" id="left-stick"></div>
+                    </div>
+                    <div class="stick right-stick">
+                        <div class="stick-indicator" id="right-stick"></div>
+                    </div>
+                    <div class="buttons-display" id="buttons-display">
+                        <!-- Button indicators populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="key-mapping">
+            <h2>Button to Key Mapping</h2>
+            <p>Map gamepad buttons to keyboard keys for DOS games.</p>
+
+            <div class="mapping-grid" id="mapping-grid">
+                <div class="mapping-row">
+                    <span class="button-label">A Button (0)</span>
+                    <input type="text" class="key-input" data-button="0" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">B Button (1)</span>
+                    <input type="text" class="key-input" data-button="1" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">X Button (2)</span>
+                    <input type="text" class="key-input" data-button="2" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">Y Button (3)</span>
+                    <input type="text" class="key-input" data-button="3" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">Left Bumper (4)</span>
+                    <input type="text" class="key-input" data-button="4" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">Right Bumper (5)</span>
+                    <input type="text" class="key-input" data-button="5" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">Left Trigger (6)</span>
+                    <input type="text" class="key-input" data-button="6" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">Right Trigger (7)</span>
+                    <input type="text" class="key-input" data-button="7" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">Select/Back (8)</span>
+                    <input type="text" class="key-input" data-button="8" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">Start (9)</span>
+                    <input type="text" class="key-input" data-button="9" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">D-Pad Up (12)</span>
+                    <input type="text" class="key-input" data-button="12" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">D-Pad Down (13)</span>
+                    <input type="text" class="key-input" data-button="13" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">D-Pad Left (14)</span>
+                    <input type="text" class="key-input" data-button="14" placeholder="Press key..." readonly>
+                </div>
+                <div class="mapping-row">
+                    <span class="button-label">D-Pad Right (15)</span>
+                    <input type="text" class="key-input" data-button="15" placeholder="Press key..." readonly>
+                </div>
+            </div>
+
+            <div class="mapping-actions">
+                <button id="save-mapping" class="btn btn-primary">Save Mapping</button>
+                <button id="reset-mapping" class="btn btn-secondary">Reset to Default</button>
+                <button id="load-preset-doom" class="btn btn-secondary">Load DOOM Preset</button>
+                <button id="load-preset-platformer" class="btn btn-secondary">Load Platformer Preset</button>
+            </div>
+        </section>
+
+        <section class="analog-settings">
+            <h2>Analog Stick Settings</h2>
+            <div class="setting-row">
+                <label for="deadzone">Deadzone: <span id="deadzone-value">0.15</span></label>
+                <input type="range" id="deadzone" min="0" max="0.5" step="0.01" value="0.15">
+            </div>
+            <div class="setting-row">
+                <label>
+                    <input type="checkbox" id="analog-to-dpad" checked>
+                    Left stick acts as D-Pad/Arrow Keys
+                </label>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>Your configurations are preserved locally, like ancient scrolls in a treasury.</p>
+    </footer>
+
+    <script src="js/games-data.js"></script>
+    <script src="js/settings.js"></script>
+</body>
+</html>

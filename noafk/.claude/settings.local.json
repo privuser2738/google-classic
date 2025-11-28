@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python tools/generate_icons.py:*)",
+      "Bash(export PATH=\"/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH\")",
+      "Bash(mingw32-make:*)",
+      "Bash(cmd //c build_mingw.bat)",
+      "Bash(/c/msys64/mingw64/bin/windres.exe -I. resource.rc -o ../build/resource.o)",
+      "Bash(/c/msys64/mingw64/bin/gcc.exe:*)",
+      "Bash(/c/msys64/mingw64/bin/windres.exe:*)",
+      "Bash(/c/msys64/mingw64/bin/cpp.exe:*)",
+      "Bash(export PATH=\"/c/msys64/mingw64/bin:$PATH\")",
+      "Bash(windres:*)",
+      "Bash(g++:*)",
+      "Bash(taskkill:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
