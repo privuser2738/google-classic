@@ -93,6 +93,21 @@ Web&nbsp;&nbsp;&nbsp;&nbsp;
 
 <hr size="1" color="#3366cc" noshade>
 
+<!-- Tip of the day (classic Google feature) -->
+<div id="tip-box" style="display: none; background-color: #ffffcc; border: 1px solid #cccc88; padding: 8px; margin: 8px; font-size: 11px;">
+<b>Tip:</b> <span id="tip-text"></span> <a href="tips.html">More search tips</a>
+</div>
+
+<!-- Did you mean suggestion -->
+<div id="did-you-mean" style="display: none; padding: 5px 10px; font-size: 13px;">
+<font color="#cc0000">Did you mean:</font> <a id="suggestion-link" href="#" style="font-style: italic;"></a>
+</div>
+
+<!-- Google Directory Category -->
+<div id="directory-category" style="display: none; padding: 5px 10px; font-size: 12px; background-color: #e8f4f7; border-bottom: 1px solid #36c;">
+<b>Category:</b> <span id="category-links"></span>
+</div>
+
 <!-- Main Content Area -->
 <table width="100%" border="0" cellspacing="0" cellpadding="0">
 <tr valign="top">
@@ -189,6 +204,92 @@ No flashy banners here.<br>
 </center>
 
 <script>
+// Classic Google search tips
+var searchTips = [
+    'Try using quotes to search for an exact phrase: "search term"',
+    'Use the minus sign to exclude words: jaguar -car',
+    'Search within a specific site using site: operator (site:example.com)',
+    'Use OR between words to search for either term',
+    'Put a * in your search as a placeholder for any word',
+    'Search for a specific file type: filetype:pdf',
+    'Use define: to get definitions: define:computer',
+    'Find pages that link to a URL: link:example.com',
+    'Use cache: to see Google\'s cached version of a page',
+    'Try the "I\'m Feeling Lucky" button to go directly to the first result'
+];
+
+// Common misspellings for "Did you mean" feature
+var commonMisspellings = {
+    'gogle': 'google',
+    'googel': 'google',
+    'goolge': 'google',
+    'yahooo': 'yahoo',
+    'yaho': 'yahoo',
+    'amazn': 'amazon',
+    'amzon': 'amazon',
+    'ebya': 'ebay',
+    'eaby': 'ebay',
+    'compter': 'computer',
+    'computr': 'computer',
+    'defintion': 'definition',
+    'defination': 'definition',
+    'wierd': 'weird',
+    'recieve': 'receive',
+    'occured': 'occurred',
+    'seperate': 'separate',
+    'untill': 'until',
+    'tommorow': 'tomorrow',
+    'goverment': 'government',
+    'enviroment': 'environment',
+    'calender': 'calendar',
+    'accomodate': 'accommodate',
+    'occassion': 'occasion',
+    'neccessary': 'necessary',
+    'restaraunt': 'restaurant',
+    'millenium': 'millennium',
+    'independant': 'independent',
+    'grammer': 'grammar',
+    'mispell': 'misspell',
+    'publically': 'publicly',
+    'foriegn': 'foreign',
+    'wierd': 'weird',
+    'freind': 'friend'
+};
+
+// Directory categories based on query keywords
+var directoryCategories = {
+    'computer': ['Computers', 'Hardware', 'Software'],
+    'software': ['Computers', 'Software', 'Downloads'],
+    'game': ['Games', 'Video Games', 'Online Games'],
+    'games': ['Games', 'Video Games', 'Online Games'],
+    'music': ['Arts', 'Music', 'MP3'],
+    'movie': ['Arts', 'Movies', 'Entertainment'],
+    'movies': ['Arts', 'Movies', 'Entertainment'],
+    'news': ['News', 'Current Events', 'Media'],
+    'sport': ['Sports', 'Recreation', 'News'],
+    'sports': ['Sports', 'Recreation', 'News'],
+    'health': ['Health', 'Medicine', 'Fitness'],
+    'food': ['Home', 'Cooking', 'Recipes'],
+    'recipe': ['Home', 'Cooking', 'Recipes'],
+    'travel': ['Recreation', 'Travel', 'Vacations'],
+    'car': ['Recreation', 'Autos', 'Buying'],
+    'cars': ['Recreation', 'Autos', 'Buying'],
+    'shopping': ['Shopping', 'Consumer Information'],
+    'book': ['Arts', 'Literature', 'Books'],
+    'books': ['Arts', 'Literature', 'Books'],
+    'science': ['Science', 'Research', 'Education'],
+    'education': ['Reference', 'Education', 'Schools'],
+    'school': ['Reference', 'Education', 'Schools'],
+    'business': ['Business', 'Companies', 'Finance'],
+    'finance': ['Business', 'Finance', 'Investing'],
+    'stock': ['Business', 'Finance', 'Stocks'],
+    'job': ['Business', 'Employment', 'Jobs'],
+    'jobs': ['Business', 'Employment', 'Jobs'],
+    'weather': ['News', 'Weather', 'Forecasts'],
+    'map': ['Reference', 'Maps', 'Directions'],
+    'maps': ['Reference', 'Maps', 'Directions']
+};
+
 // Parse query from URL and display results
 (function() {
     var urlParams = new URLSearchParams(window.location.search);
@@ -213,18 +314,73 @@ No flashy banners here.<br>
         queryDisplay.textContent = '"' + query + '"';
     }
 
+    // Show tip on first page only (30% chance)
+    if (currentPage === 1 && Math.random() < 0.3) {
+        var tipBox = document.getElementById('tip-box');
+        var tipText = document.getElementById('tip-text');
+        if (tipBox && tipText) {
+            tipText.textContent = searchTips[Math.floor(Math.random() * searchTips.length)];
+            tipBox.style.display = 'block';
+        }
+    }
+
+    // Check for "Did you mean" suggestions
+    var lowerQuery = query.toLowerCase();
+    var words = lowerQuery.split(' ');
+    var hasSuggestion = false;
+    var suggestedQuery = query;
+
+    for (var i = 0; i < words.length; i++) {
+        if (commonMisspellings[words[i]]) {
+            suggestedQuery = suggestedQuery.replace(new RegExp(words[i], 'i'), commonMisspellings[words[i]]);
+            hasSuggestion = true;
+        }
+    }
+
+    if (hasSuggestion && currentPage === 1) {
+        var didYouMean = document.getElementById('did-you-mean');
+        var suggestionLink = document.getElementById('suggestion-link');
+        if (didYouMean && suggestionLink) {
+            suggestionLink.textContent = suggestedQuery;
+            suggestionLink.href = 'search.html?q=' + encodeURIComponent(suggestedQuery);
+            didYouMean.style.display = 'block';
+        }
+    }
+
+    // Show directory category if applicable
+    if (currentPage === 1) {
+        for (var keyword in directoryCategories) {
+            if (lowerQuery.indexOf(keyword) !== -1) {
+                var dirCategory = document.getElementById('directory-category');
+                var categoryLinks = document.getElementById('category-links');
+                if (dirCategory && categoryLinks) {
+                    var cats = directoryCategories[keyword];
+                    var catHtml = '';
+                    for (var c = 0; c < cats.length; c++) {
+                        if (c > 0) catHtml += ' &gt; ';
+                        catHtml += '<a href="directory.html?cat=' + encodeURIComponent(cats[c]) + '">' + cats[c] + '</a>';
+                    }
+                    categoryLinks.innerHTML = catHtml;
+                    dirCategory.style.display = 'block';
+                }
+                break;
+            }
+        }
+    }
+
     // Update stats to show current page range
     var statsText = document.getElementById('stats-text');
     if (statsText && query) {
         var startResult = (currentPage - 1) * 10 + 1;
         var endResult = currentPage * 10;
-        statsText.innerHTML = 'Results <b>' + startResult + '</b> - <b>' + endResult + '</b> of about <b>4,230,000</b> for <b id="query-display">"' + query + '"</b>. (<b id="search-time">' + (Math.random() * 0.5 + 0.1).toFixed(2) + '</b> seconds)';
+        var totalResults = Math.floor(Math.random() * 9000000) + 1000000;
+        statsText.innerHTML = 'Results <b>' + startResult + '</b> - <b>' + endResult + '</b> of about <b>' + totalResults.toLocaleString() + '</b> for <b id="query-display">"' + query + '"</b>. (<b id="search-time">' + (Math.random() * 0.5 + 0.1).toFixed(2) + '</b> seconds)';
     }
 
     // Generate and display results
     var resultsContainer = document.getElementById('results-container');
     if (resultsContainer && query) {
-        var results = generateMockResults(query);
+        var results = generateMockResults(query, currentPage);
         var html = '';
 
         for (var i = 0; i < results.length; i++) {
@@ -232,8 +388,7 @@ No flashy banners here.<br>
             html += '<p class="result-item">';
             html += '<span class="result-title"><a href="' + result.url + '">' + result.title + '</a></span><br>';
             html += '<span class="result-snippet">' + result.snippet + '</span><br>';
-            html += '<span class="result-url">' + result.url.replace('http://', '') + '</span> - ';
-            html += Math.floor(Math.random() * 50 + 10) + 'k - ';
+            html += '<span class="result-url">' + result.url.replace('http://', '') + '</span> - ' + result.size + ' - ';
             html += '<span class="result-cached"><a href="#">Cached</a> - <a href="#">Similar pages</a></span>';
             html += '</p>';
         }

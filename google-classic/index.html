@@ -7,44 +7,56 @@
 <link rel="shortcut icon" href="favicon.ico">
 </head>
 <body bgcolor="#ffffff" topmargin="0" marginheight="0">
+
+<!-- Classic toolbar promotion banner (very 2000s!) -->
+<div id="toolbar-banner" style="background-color: #ffffcc; border-bottom: 1px solid #cccc88; padding: 4px; text-align: center; font-size: 11px;">
+<b>New!</b> Get the <a href="toolbar.html">Google Toolbar</a> for Internet Explorer.
+<a href="toolbar.html">Download now</a> - it's free!
+<a href="#" onclick="document.getElementById('toolbar-banner').style.display='none'; return false;" style="color: #666666;">[x]</a>
+</div>
+
 <center>
-<br><br><br>
-
-<!-- Google Logo -->
-<img src="images/logo.svg" alt="Google" width="276" height="110" border="0">
-
 <br><br>
 
+<!-- Google Logo / Doodle -->
+<div id="logo-container">
+<a href="index.html"><img id="google-logo" src="images/logo.svg" alt="Google" width="276" height="110" border="0"></a>
+</div>
+
+<br>
+
 <!-- Search Form -->
-<form name="f" action="search.html" method="GET">
+<form name="f" action="search.html" method="GET" onsubmit="return handleSearch(this);">
 <table border="0" cellspacing="0" cellpadding="4">
 <tr>
-<td nowrap>
+<td nowrap align="center">
 <font size="-1">
 <input type="hidden" name="hl" value="en">
 <input type="hidden" name="ie" value="ISO-8859-1">
-<b>&nbsp;Web&nbsp;</b>
-<input type="radio" name="meta" value="" checked>
-<b>Images</b>
-<input type="radio" name="meta" value="images">
-<b>Groups</b>
-<input type="radio" name="meta" value="groups">
-<b>News</b>
-<input type="radio" name="meta" value="news">
+<a href="index.html" class="nav-link"><b>Web</b></a>
+&nbsp;&nbsp;
+<a href="images.html" class="nav-link">Images</a>
+&nbsp;&nbsp;
+<a href="groups.html" class="nav-link">Groups</a>
+&nbsp;&nbsp;
+<a href="news.html" class="nav-link">News</a>
+&nbsp;&nbsp;
+<a href="froogle.html" class="nav-link">Froogle</a>
+&nbsp;&nbsp;
+<a href="more.html" class="nav-link" style="color: #cc0000;">more &raquo;</a>
 </font>
 </td>
 </tr>
 <tr>
-<td nowrap>
-<input type="text" name="q" size="55" maxlength="2048" value="" title="Google Search">
-<br>
+<td nowrap align="center">
+<input type="text" name="q" id="searchbox" size="55" maxlength="2048" value="" title="Google Search">
 </td>
 </tr>
 <tr>
 <td nowrap align="center">
 <input type="submit" name="btnG" value="Google Search">
 &nbsp;&nbsp;
-<input type="submit" name="btnI" value="I'm Feeling Lucky">
+<input type="button" name="btnI" value="I'm Feeling Lucky" onclick="feelingLucky();">
 </td>
 </tr>
 </table>
@@ -63,16 +75,88 @@
 
 <br><br>
 
+<!-- Special searches (classic Google feature) -->
+<table border="0" cellspacing="2" cellpadding="2">
+<tr>
+<td bgcolor="#cbdced" nowrap><font size="-2">&nbsp;<b>Special Searches</b>&nbsp;</font></td>
+<td><font size="-2">
+<a href="unclesam.html">U.S. Government</a> -
+<a href="linux.html">Linux</a> -
+<a href="bsd.html">BSD</a> -
+<a href="mac.html">Macintosh</a> -
+<a href="microsoft.html">Microsoft</a> -
+<a href="university.html">Universities</a>
+</font></td>
+</tr>
+</table>
+
+<br>
+
+<!-- Google Services Box -->
+<table border="0" cellspacing="0" cellpadding="0" width="420">
+<tr>
+<td bgcolor="#3366cc" colspan="3"><img width="1" height="1" alt=""></td>
+</tr>
+<tr>
+<td bgcolor="#3366cc" width="1"><img width="1" height="1" alt=""></td>
+<td bgcolor="#e5ecf9" align="center">
+<table border="0" cellspacing="4" cellpadding="4">
+<tr>
+<td valign="top" width="50%">
+<font size="-1">
+<b><a href="directory.html">Google Web Directory</a></b><br>
+<font size="-2">The web organized by topic</font>
+</font>
+</td>
+<td valign="top" width="50%">
+<font size="-1">
+<b><a href="answers.html">Google Answers</a></b><br>
+<font size="-2">Get your questions answered</font>
+</font>
+</td>
+</tr>
+<tr>
+<td valign="top">
+<font size="-1">
+<b><a href="news.html">Google News</a></b> <font color="#cc0000" size="-2"><b>NEW!</b></font><br>
+<font size="-2">Headlines from 4,500 sources</font>
+</font>
+</td>
+<td valign="top">
+<font size="-1">
+<b><a href="froogle.html">Froogle</a></b> <font color="#cc0000" size="-2"><b>BETA</b></font><br>
+<font size="-2">Find products for sale</font>
+</font>
+</td>
+</tr>
+</table>
+</td>
+<td bgcolor="#3366cc" width="1"><img width="1" height="1" alt=""></td>
+</tr>
+<tr>
+<td bgcolor="#3366cc" colspan="3"><img width="1" height="1" alt=""></td>
+</tr>
+</table>
+
+<br>
+
 <!-- Advertising link -->
 <font size="-2">
-<a href="ads.html">Advertise with Us</a> - <a href="business.html">Business Solutions</a> - <a href="about.html">About Google</a>
+<a href="ads.html">Advertise with Us</a> - <a href="business.html">Business Solutions</a> - <a href="services.html">Services &amp; Tools</a> - <a href="about.html">About Google</a>
 </font>
 
-<br><br><br><br><br><br><br><br><br><br>
+<br><br><br><br><br>
 
 <!-- Bottom section -->
 <font size="-2">
-<a href="addurl.html">Add Google to Your Site</a> - <a href="webmasters.html">Webmaster Info</a> - <a href="jobs.html">Jobs</a> - <a href="google.html">Google!</a>
+<a href="intl.html">Google.com in English</a>
+</font>
+
+<br><br>
+
+<!-- Classic hit counter style (very 2000s!) -->
+<font size="-2" color="#666666">
+You are visitor number: <span id="visitor-count" style="font-family: 'Courier New', monospace; background-color: #000000; color: #00ff00; padding: 2px 4px;">0000000</span>
 </font>
 
 <br><br>
@@ -81,8 +165,80 @@
 &copy;2003 Google - Searching 4,285,199,774 web pages
 </font>
 
+<br>
+
+<!-- Classic "Best viewed with" badge (very 2000s!) -->
+<font size="-2" color="#999999">
+Best viewed with Netscape Navigator 4.0+ or Internet Explorer 5.0+ at 800x600
+</font>
+
 </center>
 
 <script src="script.js"></script>
+<script>
+// Focus search box on load
+document.getElementById('searchbox').focus();
+
+// Fake hit counter (classic 2000s feature!)
+var baseCount = 12847563;
+var randomAdd = Math.floor(Math.random() * 10000);
+var visitorCount = baseCount + randomAdd;
+document.getElementById('visitor-count').textContent = visitorCount.toString().padStart(8, '0');
+
+// I'm Feeling Lucky - goes to first result
+function feelingLucky() {
+    var query = document.getElementById('searchbox').value;
+    if (query.trim() !== '') {
+        // Simulate going to "first result" - in reality, go to a relevant site
+        var luckyUrls = {
+            'google': 'https://www.google.com',
+            'yahoo': 'https://www.yahoo.com',
+            'amazon': 'https://www.amazon.com',
+            'ebay': 'https://www.ebay.com',
+            'wikipedia': 'https://www.wikipedia.org',
+            'youtube': 'https://www.youtube.com',
+            'facebook': 'https://www.facebook.com',
+            'default': 'search.html?q=' + encodeURIComponent(query) + '&lucky=1'
+        };
+        var lowerQuery = query.toLowerCase();
+        var url = luckyUrls[lowerQuery] || luckyUrls['default'];
+        window.location.href = url;
+    }
+    return false;
+}
+
+// Handle form submission - redirect Images/Groups/News to proper pages
+function handleSearch(form) {
+    var query = form.q.value;
+    if (query.trim() === '') return false;
+    return true;
+}
+
+// Holiday doodles (would show special logos on holidays)
+function checkForDoodle() {
+    var today = new Date();
+    var month = today.getMonth() + 1;
+    var day = today.getDate();
+
+    // Example: Show special logo on certain dates
+    // In 2003, Google had doodles for major holidays
+    var doodles = {
+        '1-1': 'Happy New Year!',
+        '2-14': 'Happy Valentine\'s Day!',
+        '7-4': 'Happy 4th of July!',
+        '10-31': 'Happy Halloween!',
+        '12-25': 'Happy Holidays!',
+        '12-31': 'Happy New Year\'s Eve!'
+    };
+
+    var key = month + '-' + day;
+    if (doodles[key]) {
+        // Would show a special doodle image here
+        // For now, just update the title
+        document.title = 'Google - ' + doodles[key];
+    }
+}
+checkForDoodle();
+</script>
 </body>
 </html>

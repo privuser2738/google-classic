@@ -253,3 +253,290 @@ hr {
 .classic-btn:active {
     border: 2px inset #d4d4d4;
 }
+
+/* ================================================
+   CLASSIC EARLY 2000s WEB ELEMENTS
+   ================================================ */
+
+/* Navigation links (no underline until hover) */
+.nav-link {
+    color: #0000cc;
+    text-decoration: none;
+}
+
+.nav-link:hover {
+    text-decoration: underline;
+}
+
+/* Classic marquee-style scrolling text (2000s nostalgia) */
+.marquee-text {
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* Bevel/emboss effect for buttons (very 2000s) */
+input[type="button"] {
+    font-size: 12px;
+    padding: 3px 8px;
+    background-color: #efefef;
+    border: 1px solid #999999;
+    cursor: pointer;
+}
+
+input[type="button"]:hover {
+    border-color: #333333;
+}
+
+/* Classic dotted separator */
+.dotted-sep {
+    border-bottom: 1px dotted #999999;
+}
+
+/* "NEW!" badge styling */
+.new-badge {
+    color: #cc0000;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+/* "BETA" badge styling */
+.beta-badge {
+    color: #cc0000;
+    font-size: 10px;
+    font-weight: bold;
+    font-style: italic;
+}
+
+/* Hit counter styling (very 2000s!) */
+.hit-counter {
+    font-family: 'Courier New', monospace;
+    background-color: #000000;
+    color: #00ff00;
+    padding: 2px 6px;
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+/* Guestbook link styling */
+.guestbook-link {
+    color: #0000cc;
+    font-size: 11px;
+}
+
+/* Classic table borders (single pixel, gray) */
+.classic-table {
+    border: 1px solid #cccccc;
+    border-collapse: collapse;
+}
+
+.classic-table td {
+    border: 1px solid #cccccc;
+    padding: 4px 8px;
+}
+
+/* Classic "click here" button styling */
+.click-here-btn {
+    background-color: #ffffcc;
+    border: 2px outset #cccc99;
+    padding: 4px 12px;
+    font-weight: bold;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.click-here-btn:active {
+    border: 2px inset #cccc99;
+}
+
+/* Under construction styling */
+.under-construction {
+    color: #ff6600;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+/* Webring navigation */
+.webring {
+    border: 1px solid #999999;
+    background-color: #f5f5f5;
+    padding: 8px;
+    font-size: 11px;
+    text-align: center;
+}
+
+/* Classic "Welcome to my site" header */
+.welcome-header {
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+    color: #0066cc;
+    font-size: 18px;
+}
+
+/* Email link with icon placeholder */
+.email-link {
+    color: #0000cc;
+    font-size: 11px;
+}
+
+/* Site last updated text */
+.last-updated {
+    color: #666666;
+    font-size: 10px;
+    font-style: italic;
+}
+
+/* Classic scrollbar styling (IE-specific, but nostalgic) */
+/* These don't work in modern browsers but are period-accurate */
+body {
+    scrollbar-face-color: #e0e0e0;
+    scrollbar-track-color: #ffffff;
+    scrollbar-arrow-color: #666666;
+    scrollbar-shadow-color: #999999;
+}
+
+/* "Best viewed with" badge area */
+.best-viewed {
+    font-size: 10px;
+    color: #999999;
+}
+
+/* Animated GIF placeholder styling */
+.animated-icon {
+    vertical-align: middle;
+    margin: 0 4px;
+}
+
+/* Classic link button (88x31 pixel badge standard) */
+.link-button {
+    width: 88px;
+    height: 31px;
+    border: 1px solid #999999;
+}
+
+/* AOL Instant Messenger online indicator style */
+.aim-online {
+    color: #00cc00;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.aim-offline {
+    color: #cc0000;
+    font-size: 10px;
+}
+
+/* Frames-style border (for non-frame sites mimicking the look) */
+.frame-border {
+    border: 2px inset #c0c0c0;
+    padding: 8px;
+}
+
+/* Classic "Site of the Day" badge */
+.site-award {
+    border: 2px solid #ffd700;
+    background-color: #ffffd0;
+    padding: 4px;
+    font-size: 10px;
+    text-align: center;
+}
+
+/* Netscape-style horizontal rule */
+hr.fancy {
+    height: 2px;
+    background: linear-gradient(to right, #ffffff, #3366cc, #ffffff);
+    border: none;
+}
+
+/* Classic Windows 98/2000 style form select */
+select {
+    font-size: 12px;
+    padding: 1px;
+    border: 1px solid #7f9db9;
+    background-color: #ffffff;
+}
+
+/* Textarea styling */
+textarea {
+    font-family: arial, sans-serif;
+    font-size: 12px;
+    border: 1px solid #7f9db9;
+    padding: 4px;
+}
+
+/* Radio and checkbox - keep them default browser style (very 2000s) */
+input[type="radio"],
+input[type="checkbox"] {
+    margin: 2px 4px 2px 0;
+}
+
+/* Classic "powered by" text */
+.powered-by {
+    font-size: 10px;
+    color: #666666;
+}
+
+/* Blinking text (the most 2000s thing ever - disabled by default) */
+/* Uncomment for authentic experience:
+.blink {
+    animation: blinker 1s linear infinite;
+}
+@keyframes blinker {
+    50% { opacity: 0; }
+}
+*/
+
+/* Table with colored header row */
+.data-table {
+    border-collapse: collapse;
+    border: 1px solid #3366cc;
+}
+
+.data-table th {
+    background-color: #3366cc;
+    color: #ffffff;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.data-table td {
+    border: 1px solid #cccccc;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.data-table tr:nth-child(even) {
+    background-color: #f5f5f5;
+}
+
+/* Classic "Skip to content" link (accessibility, but 2000s style) */
+.skip-link {
+    position: absolute;
+    top: -100px;
+    font-size: 10px;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+/* Spacer GIF replacement (using CSS) */
+.spacer {
+    display: inline-block;
+}
+
+/* Print-friendly link */
+.print-link {
+    font-size: 10px;
+    color: #666666;
+}
+
+/* Classic tooltip styling */
+[title] {
+    cursor: help;
+}
+
+/* IE-style focus outline */
+a:focus,
+input:focus,
+button:focus {
+    outline: 1px dotted #000000;
+}
