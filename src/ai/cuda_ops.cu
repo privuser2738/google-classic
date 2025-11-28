@@ -787,16 +787,137 @@ extern "C" void cuda_matmul_f32(float* dst, const float* M, const float* v,
     matmul_f32_kernel<<<out_dim, BLOCK_SIZE>>>(dst, M, v, out_dim, in_dim);
 }
 
-extern "C" void cuda_matmul_f16(float* dst, const void* M, const float* v,
-                                 int out_dim, int in_dim) {
-    matmul_f16_kernel<<<out_dim, BLOCK_SIZE>>>(dst, (const __half*)M, v, out_dim, in_dim);
+/* High-throughput F16 matmul for large vocab projection
+ * Similar to Q8_0 vocab kernel but for half precision weights
+ */
+#define F16_VOCAB_WARPS_PER_BLOCK 16  /* 16 warps × 32 = 512 threads */
+#define F16_VOCAB_THREADS (F16_VOCAB_WARPS_PER_BLOCK * WARP_SIZE)
+
+__global__ void matmul_f16_vocab_kernel(float* __restrict__ dst,
+                                         const __half* __restrict__ M,
+                                         const float* __restrict__ v,
+                                         int out_dim, int in_dim) {
+    extern __shared__ float sv[];
+
+    int tid = threadIdx.x;
+    int warp_id = tid / WARP_SIZE;
+    int lane = tid % WARP_SIZE;
+    int out_idx = blockIdx.x * F16_VOCAB_WARPS_PER_BLOCK + warp_id;
+
+    /* Cooperatively load input vector */
+    for (int i = tid; i < in_dim; i += blockDim.x) {
+        sv[i] = v[i];
+    }
+    __syncthreads();
+
+    if (out_idx >= out_dim) return;
+
+    const __half* row = M + out_idx * in_dim;
+
+    /* Each lane processes different elements */
+    float sum = 0.0f;
+    for (int i = lane; i < in_dim; i += WARP_SIZE) {
+        sum += __half2float(row[i]) * sv[i];
+    }
+
+    /* Warp reduction */
+    #pragma unroll
+    for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
+        sum += __shfl_down_sync(0xffffffff, sum, offset);
+    }
+
+    if (lane == 0) {
+        dst[out_idx] = sum;
+    }
 }
 
-/* Warp-per-row Q8_0 matmul - each warp computes one output row
- * Multiple warps per block, good for large outputs with moderate in_dim
- * Uses shared memory to cache input vector
+extern "C" void cuda_matmul_f16(float* dst, const void* M, const float* v,
+                                 int out_dim, int in_dim) {
+    /* Use optimized vocab kernel for large outputs */
+    if (out_dim > 32768) {
+        int num_blocks = (out_dim + F16_VOCAB_WARPS_PER_BLOCK - 1) / F16_VOCAB_WARPS_PER_BLOCK;
+        size_t smem_size = in_dim * sizeof(float);
+        matmul_f16_vocab_kernel<<<num_blocks, F16_VOCAB_THREADS, smem_size>>>(
+            dst, (const __half*)M, v, out_dim, in_dim);
+    } else {
+        matmul_f16_kernel<<<out_dim, BLOCK_SIZE>>>(dst, (const __half*)M, v, out_dim, in_dim);
+    }
+}
+
+/* High-throughput Q8_0 matmul for large vocab projection
+ * Uses dot-product-parallel approach:
+ * - Each warp computes one output row
+ * - Threads within warp cooperatively compute dot product
+ * - Input vector cached in shared memory (read once per block)
+ *
+ * Key optimization: vectorized int8 loads using int4 (4 bytes)
  */
-#define WARPS_PER_BLOCK 16  /* 16 warps = 512 threads */
+#define VOCAB_WARPS_PER_BLOCK 16  /* 16 warps × 32 = 512 threads */
+#define VOCAB_THREADS_PER_BLOCK (VOCAB_WARPS_PER_BLOCK * WARP_SIZE)
+#define VOCAB_TILE_ROWS VOCAB_WARPS_PER_BLOCK
+
+__global__ void matmul_q8_0_vocab_kernel(float* __restrict__ dst,
+                                          const block_q8_0* __restrict__ M,
+                                          const float* __restrict__ v,
+                                          int out_dim, int in_dim) {
+    /* Shared memory for input vector - read once, used by all warps */
+    extern __shared__ float sv[];
+
+    int tid = threadIdx.x;
+    int warp_id = tid / WARP_SIZE;
+    int lane = tid % WARP_SIZE;
+    int out_idx = blockIdx.x * VOCAB_WARPS_PER_BLOCK + warp_id;
+
+    /* Cooperatively load input vector */
+    for (int i = tid; i < in_dim; i += blockDim.x) {
+        sv[i] = v[i];
+    }
+    __syncthreads();
+
+    if (out_idx >= out_dim) return;
+
+    int blocks_per_row = in_dim / QK8_0;
+    const block_q8_0* row = M + out_idx * blocks_per_row;
+
+    /* Each lane processes different Q8_0 blocks
+     * With 64 blocks and 32 lanes, each lane handles 2 blocks
+     */
+    float sum = 0.0f;
+
+    for (int b = lane; b < blocks_per_row; b += WARP_SIZE) {
+        float scale = __half2float(row[b].d);
+        int base = b * QK8_0;
+
+        float block_sum = 0.0f;
+
+        /* Unroll the 32-element dot product */
+        #pragma unroll
+        for (int k = 0; k < QK8_0; k += 4) {
+            block_sum += (float)row[b].qs[k]     * sv[base + k];
+            block_sum += (float)row[b].qs[k + 1] * sv[base + k + 1];
+            block_sum += (float)row[b].qs[k + 2] * sv[base + k + 2];
+            block_sum += (float)row[b].qs[k + 3] * sv[base + k + 3];
+        }
+        sum += scale * block_sum;
+    }
+
+    /* Warp reduction */
+    #pragma unroll
+    for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
+        sum += __shfl_down_sync(0xffffffff, sum, offset);
+    }
+
+    if (lane == 0) {
+        dst[out_idx] = sum;
+    }
+}
+
+#define ROWS_PER_BLOCK VOCAB_TILE_ROWS
+
+/* Warp-per-row Q8_0 matmul - each warp computes one output row
+ * Uses shared memory to cache input vector - better for medium out_dim
+ */
+#define WARPS_PER_BLOCK 8  /* Reduced from 16 for better occupancy */
 
 __global__ void matmul_q8_0_warp_per_row_kernel(float* dst, const block_q8_0* M, const float* v,
                                                   int out_dim, int in_dim) {
@@ -883,34 +1004,47 @@ __global__ void matmul_q4_k_warp_per_row_kernel(float* dst, const block_q4_k* M,
         float dmin = __half2float(blk->dmin);
         int base = b * QK4_K;
 
-        /* Decode scales (packed 6-bit format) */
+        /* Decode scales using get_scale_min_k4 logic - same as CPU quant.c */
         uint8_t sc[8], m_[8];
-        for (int i = 0; i < 4; i++) {
-            sc[i] = blk->scales[i] & 0x3F;
-            m_[i] = blk->scales[i] >> 6;
+        const uint8_t* scales = blk->scales;
+        /* First 4 scales/mins: lower 6 bits of scales[0-3] and scales[4-7] */
+        for (int j = 0; j < 4; j++) {
+            sc[j] = scales[j] & 0x3F;
+            m_[j] = scales[j + 4] & 0x3F;
         }
-        for (int i = 4; i < 8; i++) {
-            sc[i] = blk->scales[i] & 0x3F;
-            m_[i] = blk->scales[i] >> 6;
+        /* Next 4 scales/mins: combine high 2 bits from scales[0-3,4-7] with low 4 bits from scales[8-11] */
+        for (int j = 0; j < 4; j++) {
+            sc[j + 4] = ((scales[j + 8] & 0xF) << 2) | (scales[j] >> 6);
+            m_[j + 4] = ((scales[j + 8] >> 4) << 2) | (scales[j + 4] >> 6);
         }
 
         float block_sum = 0.0f;
-        /* Each lane processes different packed bytes (j) within the block */
+        /* Q4_K layout: 256 values in 8 groups of 32
+         * Each group of 32 uses ONE scale index (same for both nibbles in each byte)
+         * Group j (0-7): 16 bytes (qs[j*16...j*16+15])
+         *   - Lower nibbles → positions j*32 + l (l=0-15)
+         *   - Upper nibbles → positions j*32 + l + 16 (l=0-15)
+         * Both nibbles in the same byte use the same scale[j] and min[j]
+         */
         for (int j = lane; j < QK4_K / 2; j += WARP_SIZE) {
             uint8_t qbyte = blk->qs[j];
-            int8_t q0 = qbyte & 0xF;
-            int8_t q1 = qbyte >> 4;
+            int8_t q0 = qbyte & 0xF;  /* lower nibble */
+            int8_t q1 = qbyte >> 4;   /* upper nibble */
 
-            int sub0 = (j * 2) / 32;
-            int sub1 = (j * 2 + 1) / 32;
+            /* j is byte index 0-127. Each group of 32 values uses 16 bytes.
+             * byte j belongs to scale group j/16 */
+            int scale_idx = j / 16;   /* 0-7 scale index */
+            int l = j % 16;           /* byte position within 16-byte chunk: 0-15 */
 
-            float scale0 = d * sc[sub0];
-            float min0 = dmin * m_[sub0];
-            float scale1 = d * sc[sub1];
-            float min1 = dmin * m_[sub1];
+            float scale = d * sc[scale_idx];
+            float min = dmin * m_[scale_idx];
 
-            block_sum += (scale0 * q0 - min0) * sv[base + j * 2];
-            block_sum += (scale1 * q1 - min1) * sv[base + j * 2 + 1];
+            /* Lower nibble → position scale_idx*32 + l */
+            /* Upper nibble → position scale_idx*32 + l + 16 */
+            int pos0 = scale_idx * 32 + l;
+            int pos1 = scale_idx * 32 + l + 16;
+            block_sum += (scale * q0 - min) * sv[base + pos0];
+            block_sum += (scale * q1 - min) * sv[base + pos1];
         }
         sum += block_sum;
     }
@@ -993,19 +1127,29 @@ __global__ void matmul_q6_k_warp_per_row_kernel(float* dst, const block_q6_k* M,
     }
 }
 
+static int g_q8_dispatch_count = 0;
+
 extern "C" void cuda_matmul_q8_0(float* dst, const void* M, const float* v,
                                   int out_dim, int in_dim) {
-    /* Use warp-per-row kernel for large outputs (like vocab projection)
-     * This reduces kernel launches from out_dim to out_dim/8
+    /* For very large outputs (vocab projection: 151936), use vocab kernel
+     * - 4 warps per block, each computes one row
+     * - Shared memory caches input vector
      */
-    if (out_dim > 4096) {
+    if (out_dim > 32768) {
+        int num_blocks = (out_dim + VOCAB_WARPS_PER_BLOCK - 1) / VOCAB_WARPS_PER_BLOCK;
+        size_t smem_size = in_dim * sizeof(float);  /* 8KB for dim=2048 */
+        (void)g_q8_dispatch_count;  /* Suppress unused warning */
+        matmul_q8_0_vocab_kernel<<<num_blocks, VOCAB_THREADS_PER_BLOCK, smem_size>>>(
+            dst, (const block_q8_0*)M, v, out_dim, in_dim);
+    } else if (out_dim > 4096) {
+        /* Medium outputs: warp-per-row with shared memory */
         int num_blocks = (out_dim + WARPS_PER_BLOCK - 1) / WARPS_PER_BLOCK;
         int threads = WARPS_PER_BLOCK * WARP_SIZE;  /* 256 threads */
         size_t smem_size = in_dim * sizeof(float);
         matmul_q8_0_warp_per_row_kernel<<<num_blocks, threads, smem_size>>>(
             dst, (const block_q8_0*)M, v, out_dim, in_dim);
     } else {
-        /* Use simpler kernel for smaller outputs */
+        /* Small outputs: simple kernel */
         matmul_q8_0_simple_kernel<<<out_dim, BLOCK_SIZE>>>(dst, (const block_q8_0*)M, v, out_dim, in_dim);
     }
 }
@@ -1720,15 +1864,7 @@ __global__ void multi_head_attention_kernel(
         }
         scores[p] = score * scale;
 
-        /* DEBUG: Print first score for all heads at p=0 - only when called from first token */
-        if (tid == 0 && p == 0 && kv_len == 1) {
-            const float* v_test = v_cache + kv_head * head_dim;
-            printf("[ATTN DEBUG L0] head=%d kv_head=%d q[0..3]=%g,%g,%g,%g k[0..3]=%g,%g,%g,%g score=%g\n",
-                   head, kv_head,
-                   q_h[0], q_h[1], q_h[2], q_h[3],
-                   k_p[0], k_p[1], k_p[2], k_p[3],
-                   score * scale);
-        }
+        /* DEBUG disabled for production */
     }
     __syncthreads();
 
@@ -2171,50 +2307,107 @@ extern "C" void cuda_get_embedding_q6_k(float* dst, const void* embeddings,
 }
 
 /* ============================================================================
- * Sampling Helper
+ * Sampling Helpers - GPU-side argmax and top-k
  * ============================================================================ */
 
-__global__ void argmax_kernel(const float* x, int* result, int n) {
-    __shared__ float max_vals[BLOCK_SIZE];
-    __shared__ int max_idxs[BLOCK_SIZE];
+/* Per-block argmax reduction - writes (value, index) pair per block */
+__global__ void argmax_reduce_kernel(const float* x, float* block_vals, int* block_idxs, int n) {
+    __shared__ float svals[BLOCK_SIZE];
+    __shared__ int sidxs[BLOCK_SIZE];
 
     int tid = threadIdx.x;
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int gid = blockIdx.x * blockDim.x + tid;
 
-    max_vals[tid] = (i < n) ? x[i] : -1e30f;
-    max_idxs[tid] = i;
+    /* Initialize with sentinel */
+    float my_val = -1e30f;
+    int my_idx = 0;
+
+    /* Each thread processes multiple elements with striding */
+    for (int i = gid; i < n; i += blockDim.x * gridDim.x) {
+        if (x[i] > my_val) {
+            my_val = x[i];
+            my_idx = i;
+        }
+    }
+
+    svals[tid] = my_val;
+    sidxs[tid] = my_idx;
+    __syncthreads();
+
+    /* Warp-level reduction then block-level */
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s && svals[tid] < svals[tid + s]) {
+            svals[tid] = svals[tid + s];
+            sidxs[tid] = sidxs[tid + s];
+        }
+        __syncthreads();
+    }
+
+    /* Thread 0 writes block result */
+    if (tid == 0) {
+        block_vals[blockIdx.x] = svals[0];
+        block_idxs[blockIdx.x] = sidxs[0];
+    }
+}
+
+/* Final reduction of block results */
+__global__ void argmax_final_kernel(const float* block_vals, const int* block_idxs,
+                                     int* result, int n_blocks) {
+    __shared__ float svals[BLOCK_SIZE];
+    __shared__ int sidxs[BLOCK_SIZE];
+
+    int tid = threadIdx.x;
+
+    svals[tid] = (tid < n_blocks) ? block_vals[tid] : -1e30f;
+    sidxs[tid] = (tid < n_blocks) ? block_idxs[tid] : 0;
     __syncthreads();
 
     for (int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s && max_vals[tid] < max_vals[tid + s]) {
-            max_vals[tid] = max_vals[tid + s];
-            max_idxs[tid] = max_idxs[tid + s];
+        if (tid < s && svals[tid] < svals[tid + s]) {
+            svals[tid] = svals[tid + s];
+            sidxs[tid] = sidxs[tid + s];
         }
         __syncthreads();
     }
 
     if (tid == 0) {
-        /* Atomic compare and swap for global max */
-        /* Simplified: just write first block's result */
-        if (blockIdx.x == 0) {
-            *result = max_idxs[0];
-        }
+        *result = sidxs[0];
     }
 }
 
+/* Persistent buffers for argmax (avoid alloc per call) */
+static float* g_argmax_vals = nullptr;
+static int* g_argmax_idxs = nullptr;
+static int* g_argmax_result = nullptr;
+static int g_argmax_n_blocks = 0;
+
 extern "C" int cuda_argmax(const float* x, int n) {
-    int* d_result;
+    /* For 151936 elements, use 256 blocks × 256 threads = 65536 threads
+     * Each thread handles ~2-3 elements in first pass
+     */
+    const int threads = BLOCK_SIZE;  /* 256 */
+    int blocks = (n + threads * 4 - 1) / (threads * 4);  /* ~4 elements per thread */
+    if (blocks > BLOCK_SIZE) blocks = BLOCK_SIZE;  /* Max 256 blocks for final reduction */
+
+    /* Allocate persistent buffers on first call */
+    if (g_argmax_vals == nullptr || g_argmax_n_blocks < blocks) {
+        if (g_argmax_vals) {
+            cudaFree(g_argmax_vals);
+            cudaFree(g_argmax_idxs);
+            cudaFree(g_argmax_result);
+        }
+        cudaMalloc(&g_argmax_vals, blocks * sizeof(float));
+        cudaMalloc(&g_argmax_idxs, blocks * sizeof(int));
+        cudaMalloc(&g_argmax_result, sizeof(int));
+        g_argmax_n_blocks = blocks;
+    }
+
+    /* Two-pass reduction */
+    argmax_reduce_kernel<<<blocks, threads>>>(x, g_argmax_vals, g_argmax_idxs, n);
+    argmax_final_kernel<<<1, BLOCK_SIZE>>>(g_argmax_vals, g_argmax_idxs, g_argmax_result, blocks);
+
     int h_result = 0;
-
-    cudaMalloc(&d_result, sizeof(int));
-
-    /* For simplicity, use single block for small vocab or do proper reduction */
-    int blocks = 1;
-    int threads = min(n, BLOCK_SIZE);
-    argmax_kernel<<<blocks, threads>>>(x, d_result, min(n, BLOCK_SIZE));
-
-    cudaMemcpy(&h_result, d_result, sizeof(float), cudaMemcpyDeviceToHost);
-    cudaFree(d_result);
+    cudaMemcpy(&h_result, g_argmax_result, sizeof(int), cudaMemcpyDeviceToHost);
 
     return h_result;
 }

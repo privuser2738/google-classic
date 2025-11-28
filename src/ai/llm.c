@@ -14,6 +14,20 @@
 #include <time.h>
 #include <math.h>
 
+/* SIMD support for fast matrix multiplication */
+#if defined(__AVX2__)
+    #define USE_AVX2 1
+    #include <immintrin.h>
+#elif defined(__AVX__)
+    #define USE_AVX 1
+    #include <immintrin.h>
+#endif
+
+/* OpenMP for parallel matmul */
+#ifdef _OPENMP
+    #include <omp.h>
+#endif
+
 /* Enable verbose debug output (set to 0 for production) */
 #define LLM_DEBUG_VERBOSE 0
 
@@ -766,6 +780,30 @@ void matmul_q(float *dst, const void *M, const float *v,
     switch (quant_type) {
         case GGML_TYPE_F32: {
             const float *Mf = (const float *)M;
+#ifdef USE_AVX2
+            #pragma omp parallel for schedule(static)
+            for (int i = 0; i < out_dim; i++) {
+                const float *row = Mf + i * in_dim;
+                __m256 acc = _mm256_setzero_ps();
+                int j = 0;
+                for (; j + 8 <= in_dim; j += 8) {
+                    __m256 vr = _mm256_loadu_ps(row + j);
+                    __m256 vv = _mm256_loadu_ps(v + j);
+                    acc = _mm256_fmadd_ps(vr, vv, acc);
+                }
+                /* Horizontal sum */
+                __m128 hi = _mm256_extractf128_ps(acc, 1);
+                __m128 lo = _mm256_castps256_ps128(acc);
+                __m128 sum4 = _mm_add_ps(lo, hi);
+                __m128 shuf = _mm_movehdup_ps(sum4);
+                __m128 sum2 = _mm_add_ps(sum4, shuf);
+                shuf = _mm_movehl_ps(shuf, sum2);
+                float sum = _mm_cvtss_f32(_mm_add_ss(sum2, shuf));
+                /* Handle remainder */
+                for (; j < in_dim; j++) sum += row[j] * v[j];
+                dst[i] = sum;
+            }
+#else
             for (int i = 0; i < out_dim; i++) {
                 float sum = 0.0f;
                 const float *row = Mf + i * in_dim;
@@ -774,6 +812,7 @@ void matmul_q(float *dst, const void *M, const float *v,
                 }
                 dst[i] = sum;
             }
+#endif
             break;
         }
         case GGML_TYPE_F16: {
@@ -794,6 +833,47 @@ void matmul_q(float *dst, const void *M, const float *v,
             const block_q8_0 *blocks = (const block_q8_0 *)M;
             int blocks_per_row = in_dim / QK8_0;
 
+#ifdef USE_AVX2
+            /* AVX2 optimized: process 8 floats at a time using int8->int32 multiply */
+            #pragma omp parallel for schedule(static)
+            for (int i = 0; i < out_dim; i++) {
+                const block_q8_0 *row = blocks + i * blocks_per_row;
+                __m256 acc = _mm256_setzero_ps();
+
+                for (int b = 0; b < blocks_per_row; b++) {
+                    float scale = f16_to_f32(row[b].d);
+                    __m256 vscale = _mm256_set1_ps(scale);
+                    int base = b * QK8_0;
+
+                    /* Process 32 elements in 4 groups of 8 */
+                    for (int k = 0; k < 32; k += 8) {
+                        /* Load 8 int8 weights and convert to float */
+                        __m128i qi8 = _mm_loadl_epi64((const __m128i *)(row[b].qs + k));
+                        __m256i qi32 = _mm256_cvtepi8_epi32(qi8);
+                        __m256 qf = _mm256_cvtepi32_ps(qi32);
+
+                        /* Load 8 floats from input vector */
+                        __m256 vv = _mm256_loadu_ps(v + base + k);
+
+                        /* Multiply and accumulate: acc += scale * q * v */
+                        __m256 prod = _mm256_mul_ps(qf, vv);
+                        prod = _mm256_mul_ps(prod, vscale);
+                        acc = _mm256_add_ps(acc, prod);
+                    }
+                }
+
+                /* Horizontal sum of acc */
+                __m128 hi = _mm256_extractf128_ps(acc, 1);
+                __m128 lo = _mm256_castps256_ps128(acc);
+                __m128 sum4 = _mm_add_ps(lo, hi);
+                __m128 shuf = _mm_movehdup_ps(sum4);
+                __m128 sum2 = _mm_add_ps(sum4, shuf);
+                shuf = _mm_movehl_ps(shuf, sum2);
+                __m128 sum1 = _mm_add_ss(sum2, shuf);
+                dst[i] = _mm_cvtss_f32(sum1);
+            }
+#else
+            /* Scalar fallback */
             for (int i = 0; i < out_dim; i++) {
                 float sum = 0.0f;
                 const block_q8_0 *row = blocks + i * blocks_per_row;
@@ -807,6 +887,7 @@ void matmul_q(float *dst, const void *M, const float *v,
                 }
                 dst[i] = sum;
             }
+#endif
             break;
         }
         case GGML_TYPE_Q4_0: {

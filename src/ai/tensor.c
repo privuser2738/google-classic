@@ -481,28 +481,71 @@ int sample_prob(const float *probs, int n, float rand_val) {
 }
 
 
+/* Quickselect partition helper for top_k */
+static int partition_desc(float *arr, int *indices, int left, int right, int pivot_idx) {
+    float pivot_val = arr[indices[pivot_idx]];
+    /* Move pivot to end */
+    int tmp = indices[pivot_idx];
+    indices[pivot_idx] = indices[right];
+    indices[right] = tmp;
+
+    int store_idx = left;
+    for (int i = left; i < right; i++) {
+        if (arr[indices[i]] > pivot_val) {  /* Descending order */
+            tmp = indices[store_idx];
+            indices[store_idx] = indices[i];
+            indices[i] = tmp;
+            store_idx++;
+        }
+    }
+    /* Move pivot to final position */
+    tmp = indices[store_idx];
+    indices[store_idx] = indices[right];
+    indices[right] = tmp;
+    return store_idx;
+}
+
+/* Quickselect to find k-th largest element - O(n) average */
+static void quickselect_k(float *arr, int *indices, int left, int right, int k) {
+    while (left < right) {
+        /* Choose pivot as median of left, mid, right */
+        int mid = left + (right - left) / 2;
+        int pivot_idx = mid;
+
+        int pos = partition_desc(arr, indices, left, right, pivot_idx);
+
+        if (pos == k) {
+            return;
+        } else if (pos < k) {
+            left = pos + 1;
+        } else {
+            right = pos - 1;
+        }
+    }
+}
+
 void top_k(float *probs, int n, int k) {
     if (k >= n) return;
 
-    /* Find k-th largest value */
+    /* Use quickselect to partition: indices[0..k-1] will have top k elements
+     * quickselect positions the k-th element at index k-1, with all larger
+     * elements before it (unsorted) and all smaller elements after it */
     int *indices = (int *)malloc(n * sizeof(int));
     for (int i = 0; i < n; i++) indices[i] = i;
 
-    /* Simple partial sort to find top k */
-    for (int i = 0; i < k; i++) {
-        int max_idx = i;
-        for (int j = i + 1; j < n; j++) {
-            if (probs[indices[j]] > probs[indices[max_idx]]) {
-                max_idx = j;
-            }
+    /* Partition so indices[0..k-1] contains top k (unsorted) */
+    quickselect_k(probs, indices, 0, n - 1, k - 1);
+
+    /* Find minimum of top k elements (the k-th largest value)
+     * This is the threshold - anything below this gets zeroed */
+    float threshold = probs[indices[0]];
+    for (int i = 1; i < k; i++) {
+        if (probs[indices[i]] < threshold) {
+            threshold = probs[indices[i]];
         }
-        int tmp = indices[i];
-        indices[i] = indices[max_idx];
-        indices[max_idx] = tmp;
     }
 
-    /* Zero out non-top-k */
-    float threshold = probs[indices[k - 1]];
+    /* Zero out non-top-k and compute sum */
     float sum = 0.0f;
     for (int i = 0; i < n; i++) {
         if (probs[i] < threshold) {
@@ -523,23 +566,57 @@ void top_k(float *probs, int n, int k) {
     free(indices);
 }
 
+/* Quicksort comparison function helper - descending order */
+static int compare_probs_desc(const void *a, const void *b, void *probs_arr) {
+    float *probs = (float *)probs_arr;
+    int ia = *(const int *)a;
+    int ib = *(const int *)b;
+    float diff = probs[ib] - probs[ia];  /* Descending */
+    if (diff < 0) return -1;
+    if (diff > 0) return 1;
+    return 0;
+}
+
+/* In-place quicksort for indices array sorted by probs descending */
+static void quicksort_indices(int *indices, float *probs, int left, int right) {
+    if (left >= right) return;
+
+    /* Choose pivot and partition */
+    int mid = left + (right - left) / 2;
+    float pivot_val = probs[indices[mid]];
+
+    /* Move pivot to end */
+    int tmp = indices[mid];
+    indices[mid] = indices[right];
+    indices[right] = tmp;
+
+    int store = left;
+    for (int i = left; i < right; i++) {
+        if (probs[indices[i]] > pivot_val) {  /* Descending */
+            tmp = indices[store];
+            indices[store] = indices[i];
+            indices[i] = tmp;
+            store++;
+        }
+    }
+    tmp = indices[store];
+    indices[store] = indices[right];
+    indices[right] = tmp;
+
+    quicksort_indices(indices, probs, left, store - 1);
+    quicksort_indices(indices, probs, store + 1, right);
+}
+
 void top_p(float *probs, int n, float p) {
-    /* Sort indices by probability descending */
+    /* For top_p, we need sorted probabilities to accumulate to threshold p
+     * Use O(n log n) quicksort instead of O(n^2) bubble sort */
     int *indices = (int *)malloc(n * sizeof(int));
     for (int i = 0; i < n; i++) indices[i] = i;
 
-    /* Simple sort */
-    for (int i = 0; i < n - 1; i++) {
-        for (int j = i + 1; j < n; j++) {
-            if (probs[indices[j]] > probs[indices[i]]) {
-                int tmp = indices[i];
-                indices[i] = indices[j];
-                indices[j] = tmp;
-            }
-        }
-    }
+    /* Sort indices by probability descending - O(n log n) */
+    quicksort_indices(indices, probs, 0, n - 1);
 
-    /* Find cutoff */
+    /* Find cutoff where cumulative probability exceeds p */
     float cumsum = 0.0f;
     int cutoff = n;
     for (int i = 0; i < n; i++) {
@@ -550,7 +627,7 @@ void top_p(float *probs, int n, float p) {
         }
     }
 
-    /* Zero out below cutoff */
+    /* Zero out tokens below cutoff */
     for (int i = cutoff; i < n; i++) {
         probs[indices[i]] = 0.0f;
     }

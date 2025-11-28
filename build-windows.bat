@@ -50,8 +50,8 @@ if "%DEBUG%"=="1" (
     echo [BUILD] Mode: Debug
     set "CFLAGS=-Wall -Wextra -std=c11 -g -O0 -DDEBUG"
 ) else (
-    echo [BUILD] Mode: Release
-    set "CFLAGS=-Wall -Wextra -std=c11 -O3 -ffast-math -march=native -s -DNDEBUG"
+    echo [BUILD] Mode: Release + AVX2 + OpenMP
+    set "CFLAGS=-Wall -Wextra -std=c11 -O3 -ffast-math -march=native -mavx2 -mfma -fopenmp -s -DNDEBUG"
 )
 
 echo [BUILD] Compiling with MinGW-w64...

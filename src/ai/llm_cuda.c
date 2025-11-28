@@ -379,26 +379,7 @@ int llm_cuda_init(llm_ctx_t *ctx) {
         dl->d_wo = upload_tensor(w->layers[l].wo, quant_size((size_t)dim * q_dim, g_weight_type));
         dl->wv_type = layer_wv_type;  /* Store for inference */
 
-        /* DEBUG: Check layer 0 weight pointers and first bytes */
-        if (l == 0) {
-            printf("[WEIGHT DEBUG] L0: wq=%p wk=%p wv=%p\n",
-                   w->layers[l].wq, w->layers[l].wk, w->layers[l].wv);
-            /* Compare first 16 bytes of wk vs wv */
-            const uint8_t *wk_bytes = (const uint8_t*)w->layers[l].wk;
-            const uint8_t *wv_bytes = (const uint8_t*)w->layers[l].wv;
-            printf("[WEIGHT DEBUG] L0 wk first 16: ");
-            for (int i = 0; i < 16; i++) printf("%02x ", wk_bytes[i]);
-            printf("\n[WEIGHT DEBUG] L0 wv first 16: ");
-            for (int i = 0; i < 16; i++) printf("%02x ", wv_bytes[i]);
-            printf("\n");
-            /* Check if they're the same pointer */
-            if (w->layers[l].wk == w->layers[l].wv) {
-                printf("[WEIGHT DEBUG] WARNING: wk and wv point to same address!\n");
-            }
-            /* Check pointer difference to detect adjacent tensors */
-            ptrdiff_t diff = (const uint8_t*)w->layers[l].wv - (const uint8_t*)w->layers[l].wk;
-            printf("[WEIGHT DEBUG] L0 wv - wk pointer diff: %td bytes\n", diff);
-        }
+        /* DEBUG disabled for production */
 
         /* QKV biases (Qwen) */
         if (w->layers[l].bq) {
@@ -568,7 +549,8 @@ static double get_time_ms(void) {
 #endif
 
 /* Per-token timing */
-static int g_profile_enabled = 0;  /* Set to 1 to enable profiling */
+static int g_profile_enabled = 0;  /* Set to 1 to enable profiling (adds debug memcpy which slows things) */
+static int g_timing_enabled = 1;   /* Set to 1 to enable timing output */
 static double g_total_layer_time = 0;
 static double g_total_output_time = 0;
 static int g_profile_tokens = 0;
@@ -936,19 +918,24 @@ int llm_forward_cuda(llm_ctx_t *ctx, const int *tokens, int n_tokens) {
         gpu_matmul(g_cuda.d_logits, g_cuda.d_output, g_cuda.d_x,
                    vocab_size, dim, g_cuda.output_type);
 
+        /* Synchronize before timing D2H */
+        cudaDeviceSynchronize();
+        double t_after_matmul = get_time_ms();
+
         /* Copy logits back to CPU for sampling (this is synchronous) */
         cuda_memcpy_d2h(ctx->state.logits, g_cuda.d_logits, vocab_size * sizeof(float));
 
         double t_end = get_time_ms();  /* d2h is sync, so this measures actual time */
 
-        /* Profile first few tokens */
-        if (g_profile_enabled && g_profile_tokens < 5) {
-            printf("[PERF] Token %d: layers=%.1fms output=%.1fms total=%.1fms\n",
+        /* Profile first few tokens - now shows matmul vs D2H separately */
+        if ((g_profile_enabled || g_timing_enabled) && g_profile_tokens < 5) {
+            printf("[PERF] Token %d: layers=%.1fms matmul=%.1fms d2h=%.1fms total=%.1fms\n",
                    g_profile_tokens, t_after_layers - t_start,
-                   t_end - t_after_layers, t_end - t_start);
+                   t_after_matmul - t_after_layers, t_end - t_after_matmul,
+                   t_end - t_start);
             g_profile_tokens++;
             if (g_profile_tokens == 5) {
-                printf("[PERF] Profiling disabled after 5 tokens\n");
+                printf("[PERF] Timing disabled after 5 tokens\n");
             }
         }
 
